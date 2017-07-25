@@ -74,14 +74,14 @@ The script also recognizes these environment variables:
   BBI_COMPRESSOR:
     This tells the script which program should be used to compress
     the ramfs. Options include gzip, bzip2, or xz. The default is gzip.
-    To disable compression, use COMPRESSOR=cat .
+    To disable compression, use BBI_COMPRESSOR=cat .
 
     Note that if you want to use xz compression, you must include the
     full path to the xz program to prevent the busybox shell from trying
     to run its own xz applet which only supports decompression. Also, 
     your kernel's internal xz decompressor might not support the default
     integrity checking of your xz program, so to use xz you will probably
-    need something like: COMPRESSOR='/usr/bin/xz -9 --check=crc32'
+    need something like: BBI_COMPRESSOR='/usr/bin/xz -9 --check=crc32'
 
   BBI_RAMFS_INIT:
     The initramfs image contains a /init script in its root directory.
@@ -141,15 +141,11 @@ The script also recognizes these environment variables:
   BBI_KEEP_TMPFILES:
     The mkramfs scripts creates a temporary directory under /tmp/ with a
     name in the form of "/tmp/initramfs.XXXXXX" (with the XXXXXX being 
-    replaced by some random characters). This directory contains the
-    all the files and sub-directories used to create the initramfs image.
+    replaced by some random characters). This directory contains all the
+    files and sub-directories used to create the initramfs image.
     It is normally deleted after the initramfs is created, but if you want to
     examine its contents for debugging or educational purposes, you can set:
     BBI_KEEP_TMPFILES='1' and the directory will not be removed.
-
-  BBI_MKRAMFS_CONF:
-    Most of the variables described above can be saved to a file, by default
-    it is /etc/bb.d/conf/mkramfs.conf (See description below)
 
   BBI_EXTRA_FILES:
     This can be a whitespace-delimited list of files and/or folders that will
@@ -181,6 +177,10 @@ The script also recognizes these environment variables:
     run in the "/tmp/initramfs.XXXXXX" directory (described above) after all 
     other operations are completed (except for the ramfs archive creation).
 
+  BBI_MKRAMFS_CONF:
+    Most of the variables described above can be saved to a file, by default
+    it is /etc/bb.d/conf/mkramfs.conf (See description below)
+
 
 /etc/bb.d/conf/mkramfs.conf:
 This file contains the environment variables listed above and is sourced by
@@ -210,12 +210,12 @@ kernel version loaded by your bootloader. Running the kvck script
 (Kernel Version ChecK) can usually detect a mismatch and optionally update
 the ramfs if needed. For Arch Linux and Void Linux systems, see the description
 of the ./dist/* scripts below to perform this operation automatically
-whenever the kernel is updated by pacman. If you know how to integrate
-this type of "hook" into other package managers I would like to hear
-from you. Otherwise you can run this command either post-upgrade or
+whenever the kernel is updated by the package manager. If you know how to
+integrate this type of "hook" into other package managers I would like to
+hear from you. Otherwise you can run this command either post-upgrade or
 just before a reboot:
   /usr/share/bbinit/kvck -u /boot/vmlinuz /boot/ramfs
-(Being sure to adjust the kernel and ramfs names to match you setup)
+(Being sure to adjust the kernel and ramfs names to match your setup)
 
 
 /usr/share/bbinit/generic:
@@ -240,7 +240,7 @@ syslinux's "memdisk" loader.
 
 
 /usr/share/bbinit/utils/pxesrv:
-An easy-to-use script to run a PXE server using only syslinux and busybpx.
+An easy-to-use script to run a PXE server using only syslinux and busybox.
 (PXE is a technology used to boot a computer from an operating system served
 over a netework connection.)
 
@@ -361,7 +361,7 @@ is launched, in case your system has an incompatible version of
 This directory contains additional scripts that may be used by bbinit
 or other scripts to launch the corrsponding busybox applets. At the time
 of this writing it mostly contains wrappers around busybox's ifup, ifdown
-and related commands. It also contains the autologin scripe described below.
+and related commands. It also contains the autologin script described below.
 
 /etc/bb.d/exec/autologin:
 This script provides an option to automatically log in a specific user,

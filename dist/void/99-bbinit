@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Void Linux users: To automatically run bbinit's mkramfs
+# whenever xbps updates the kernel package, copy this file to 
+# /etc/kernel.d/post-install/
+
+#
+# Kernel post-install hook for bbinit.
+#
+# Arguments passed to this script: $1 pkgname, $2 version.
+#
+PKGNAME="$1"
+VERSION="$2"
+
+[ -x /usr/share/bbinit/mkramfs ] ||	exit 0
+
+ln -sf vmlinuz-${VERSION} /boot/vmlinuz
+/usr/share/bbinit/mkramfs ${VERSION} void.img
+
+exit $?
+

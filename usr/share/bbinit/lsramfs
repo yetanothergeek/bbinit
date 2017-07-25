@@ -1,0 +1,55 @@
+#!/bin/busybox sh
+
+BB=/bin/busybox
+
+usage () {
+$BB cat << EOF
+
+Usage:  $0 [option] <filename>
+List contents of an initramfs file.
+Use -v or -l option for detailed list.
+
+EOF
+exit
+}
+
+VERBOSE=0
+RAMFS=
+
+die () {
+  echo "ERROR: $1" 1>&2
+  exit 1
+}
+
+
+readable () {
+  [ -e "$1" ] || die "File not found: '$1'"
+  [ -f "$1" ] || die "Not a regular file: '$1'"
+  [ -r "$1" ] || die "Can't read '$1' [Permission denied]"
+}
+
+
+for Arg in "$@" ; do
+  case "$Arg" in
+    -h|--help) usage 0 ;;
+    -v|-l) VERBOSE=1 ;;
+    *)
+      [ -n "$RAMFS" ] && die "Extra argument: $Arg"
+      readable "$Arg"
+      RAMFS=$Arg
+    ;;
+  esac
+done
+
+
+UZ=cat
+for Z in gzip bzip2 xz ; do
+  $BB $Z -dc $RAMFS &> /dev/null && UZ="$Z -dc" && break
+done
+
+if [ "$VERBOSE" -eq 0 ] ; then
+  $BB $UZ "$RAMFS" | $BB cpio -tv 2> /dev/null | $BB awk '{if (/^d.*/) {print $6 "/"} else {print $6} }' | sort
+else
+  $BB $UZ "$RAMFS" | $BB cpio -tv 2> /dev/null
+fi
+

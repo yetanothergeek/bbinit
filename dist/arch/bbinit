@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Arch Linux users: To automatically run bbinit's mkramfs
+# whenever pacman updates the kernel package:
+# Copy this file to /usr/lib/initcpio/install/ and add 
+# the name "bbinit" to the HOOKS array in /etc/mkinitcpio.conf
+# Then specify "arch.img" as the initrd in your
+# bootloader's configuration for bbinit
+
+
+build() {
+  local _bbinit_arch_img='/boot/arch.img'
+  local _bbinit_tools_dir='/usr/share/bbinit/'
+  $_bbinit_tools_dir/kvck -q $KERNELVERSION $_bbinit_arch_img || \
+  $_bbinit_tools_dir/mkramfs $KERNELVERSION $_bbinit_arch_img
+}
+
+help() {
+    cat <<HELPEOF
+This hook builds an alternate initramfs for the bbinit boot system.
+HELPEOF
+}
+
+

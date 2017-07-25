@@ -1,0 +1,7 @@
+#!/bin/busybox sh
+# Change device's group ownership to $1, then execute remaining args.
+[ "x$1" != 'x' ] && [ -e "$MDEV" ] || exit 1
+[ "$ACTION" = 'add' ] && [ -f /etc/group ] && \
+/bin/busybox grep -q "^$1:" /etc/group && /bin/busybox chgrp "$1" "$MDEV"
+[ $# -gt 1 ] && shift && exec $@
+

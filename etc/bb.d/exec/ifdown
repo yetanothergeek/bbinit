@@ -1,0 +1,3 @@
+#!/bin/busybox sh
+export PATH=/etc/bb.d/exec:$PATH
+exec /bin/busybox ifdown "$@"

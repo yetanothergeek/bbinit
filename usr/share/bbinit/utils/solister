@@ -1,0 +1,396 @@
+#!/bin/busybox sh
+
+# Script to find shared library dependencies in an ELF binary file.
+# Yes, it's complicated. You could do the same thing faster
+# (and probably better) with "ldd" or "lddtree" but I'm trying to
+# make tools that depend only on busybox, so...
+
+
+BB=/bin/busybox
+
+BeQuiet=0
+Warn () { [ $BeQuiet -eq 0 ] && echo "${0##*/}: Warning: $@" 1>&2 ; }
+Note () { echo "${0##*/}: $@" 1>&2 ; }
+
+
+# Read some ELF info from file:
+# -i shows interpreter, -d lists dependencies, otherwise both
+#     parse_elf_info <filename> [-i|-d]
+parse_elf_info () {
+
+  File="$1"
+
+  # Oh no!
+  Die () { echo "${0##*/}: ERROR: $@: $File" 1>&2; exit 1; }
+
+
+  # I couldn't manage to get busybox hexdump to read more than
+  # 4 bytes at a time into an integer value. So 64-bit values
+  # must be read in two 32-bit chunks. To simplify the code in
+  # places where different systems have different sized values,
+  # for a 64-bit file we read two 32 bit values, and for a
+  # 32-bit file we read two 16 bit values.
+  # This function combines the two values into one.
+  # Note that places in the format strings that work this way
+  # should read two hexadecimal values without the leading "0x"
+  MakeLong () {
+    local lo="0x$1"
+    local hi="0x$2"
+    printf '%d' $((lo|(hi<<(class*16)))) ;
+  }
+
+
+  # Read chunk of file and return the raw data ("topic" is for error info)
+  #   RAW <start> <length> <topic>
+  RAW () {
+    $BB dd bs=1 skip=$1 count=$2 if=$File 2> /dev/null || \
+      Die "RAW() Failed reading $3"
+  }
+
+
+  # Read chunk of file and return formatted data ("topic" is for error info)
+  #   FMT <start> <length> <format> <topic>
+  FMT () {
+    $BB hexdump -s "$1" -n "$2" -e "$3" "$File" || \
+      Die "FMT() Failed reading $4"
+  }
+
+  [ -e "$1" ] || Die "No such file"
+  [ -r "$1" ] || Die "Permission denied"
+  [ -f "$1" ] || Die "Not a regular file"
+
+  # The first four bytes of the file are the ELF signature,
+  # and the fifth byte tells us if the file is 32- or 64-bit.
+  # We'll need to know that before we try to read the rest
+  # of the file.
+  SigFmt='1/1 "magic=%o" 1/3 "%.3s;\n" 1/1 "class=%d;\n"'
+
+  sig=$(FMT 0 5 "$SigFmt" 'signature')
+
+  [ "$sig" ] || Die "Failed to read signature"
+
+  eval "$sig" || Die "Failed to parse signature"
+
+  [ "$magic" = '177ELF' ] || Die "Not an ELF file"
+
+  case "$class" in
+    1|2)
+      i=$((class*2))
+      w="0$((class*4))"
+      [ $class -eq 1 ] && hsize=52 || hsize=64
+    ;;
+    *) Die "Invalid ELF class ($class)" ;;
+  esac
+
+  # ELF header
+  ElfHdrFmt='
+  1/1    "magic=%o"
+  1/3    "%.3s;\n"
+  1/1    "class=%d;\n"
+  1/1    "endian=%d;\n"
+  1/1    "version=%d;\n"
+  1/1    "osabi=%d;\n"
+  1/1    "abiver=%d;\n"
+  1/4    "pad=%d;\n"
+  1/2    "pad=%d;\n"
+  1/1    "pad=%d;\n"
+  1/2    "type=%d;\n"
+  1/2    "machine=%x;\n"
+  1/4    "elfver=%x;\n"
+  1/'$i' "entry1=%'$w'x;\n"
+  1/'$i' "entry2=%'$w'x;\n"
+  1/'$i' "phoff1=%'$w'x;\n"
+  1/'$i' "phoff2=%'$w'x;\n"
+  1/'$i' "shoff1=%'$w'x;\n"
+  1/'$i' "shoff2=%'$w'x;\n"
+  1/4    "flags=%04x;\n"
+  1/2    "hsize=%d;\n"
+  1/2    "phesize=%d;\n"
+  1/2    "phenum=%d;\n"
+  1/2    "shesize=%d;\n"
+  1/2    "shenum=%d;\n"
+  1/2    "strndx=%d;\n"
+  "\n"
+  '
+
+  elf_hdr=$(FMT 0 $hsize "$ElfHdrFmt" 'ELF header')
+  [ "$elf_hdr" ] || Die "Failed to read ELF header"
+  eval "$elf_hdr" || Die "Failed to parse ELF header"
+
+  phoff=$(MakeLong $phoff1 $phoff2)
+
+  # Program header (Different sizes for 32 vs 64, and layout changes too!)
+  if [ $class -eq 1 ] ; then
+  ProgHdrFmt='
+  1/4    "p_type=0x%08x;"
+  1/'$i' "p_offset1=%'$w'x;"
+  1/'$i' "p_offset2=%'$w'x;"
+  1/'$i' "p_vaddr1=%'$w'x;"
+  1/'$i' "p_vaddr2=%'$w'x;"
+  1/'$i' "p_paddr1=%'$w'x;"
+  1/'$i' "p_paddr2=%'$w'x;"
+  1/'$i' "p_filesz1=%'$w'x;"
+  1/'$i' "p_filesz2=%'$w'x;"
+  1/'$i' "p_memsz1=%'$w'x;"
+  1/'$i' "p_memsz2=%'$w'x;"
+  1/4    "p_flags=0x%x;"
+  1/'$i' "p_align1=%'$w'x;"
+  1/'$i' "p_align2=%'$w'x;"
+  "\n"
+  '
+  else
+  ProgHdrFmt='
+  1/4    "p_type=0x%08x;"
+  1/4    "p_flags=0x%x;"
+  1/'$i' "p_offset1=%'$w'x;"
+  1/'$i' "p_offset2=%'$w'x;"
+  1/'$i' "p_vaddr1=%'$w'x;"
+  1/'$i' "p_vaddr2=%'$w'x;"
+  1/'$i' "p_paddr1=%'$w'x;"
+  1/'$i' "p_paddr2=%'$w'x;"
+  1/'$i' "p_filesz1=%'$w'x;"
+  1/'$i' "p_filesz2=%'$w'x;"
+  1/'$i' "p_memsz1=%'$w'x;"
+  1/'$i' "p_memsz2=%'$w'x;"
+  1/'$i' "p_align1=%'$w'x;"
+  1/'$i' "p_align2=%'$w'x;"
+  "\n"
+  '
+  fi
+
+  phsize=$((phesize*phenum))
+
+  ProgHdrs=$(FMT $phoff $phsize "$ProgHdrFmt" 'program headers')
+  [ "$ProgHdrs" ] || Die "Failed to read program headers"
+  eval "$ProgHdrs" || Die "Failed to parse program headers"
+
+  for ProgHdr in $ProgHdrs; do
+    eval "$ProgHdr"
+    p_offset=$(MakeLong $p_offset1 $p_offset2)
+    p_filesz=$(MakeLong $p_filesz1 $p_filesz2)
+    case $(printf %d $p_type) in
+      2)
+        dyn_off=$p_offset
+        dyn_size=$p_filesz
+      ;;
+      3)
+        interp_off=$p_offset
+        interp_size=$p_filesz
+      ;;
+    esac
+  done
+  if [ "$2" != '-d' ] ; then
+    if [ "$interp_off" ] && [ "$interp_size" ]; then
+      echo $(RAW $interp_off $interp_size 'interpreter name')
+    fi
+    [ "$2" = '-i' ] && return
+  fi
+  local name_offsets
+  if [ "$dyn_off" ] ; then
+    # Dynamic structures are really just two long int values.
+    # The "dyn_off" we got from the program headers tells us
+    # where an array of these structs begins, and the "dyn_size"
+    # value is big enough to read all of them, but sometimes it
+    # reads a bit too much. The very last element in the array is
+    # always {0,0} so we need to watch for that when iterating
+    # through the array. For each element, the "d_tag" value
+    # tells us what type of element it is and the "d_un" is a
+    # union containing its value. It's really just a union of
+    # two identically-sized integers; I don't know why they
+    # needed a union but I'm sure they know better than me.
+    # For our purposes we're only interested in four types
+    # of tags: (1) the location of the string table, (2) the
+    # size of the string table, (3) any structs that give an
+    # offset of a shared library name inside the string table,
+    # and (4) the DT_NULL struct that signals the end of the array.
+
+    DynStructFmt='
+    1/'$i' "d_tag1=%'$w'x;"
+    1/'$i' "d_tag2=%'$w'x;"
+    1/'$i' "d_un1=%'$w'x;"
+    1/'$i' "d_un2=%'$w'x;"
+    "\n"
+    '
+    DynStructs=$(FMT $dyn_off $dyn_size "$DynStructFmt" 'dynamic data structs')
+    [ "$DynStructs" ] || Die "Failed to read dynamic data structures"
+
+    for DynStruct in $DynStructs ; do
+      eval "$DynStruct" || Die "Failed to parse a dynamic data structure"
+      d_tag=$(MakeLong $d_tag1 $d_tag2)
+      d_un=$(MakeLong $d_un1 $d_un2)
+      case $d_tag in
+        0) break ;; # DT_NULL
+        1) name_offsets="$name_offsets $d_un" ;; # DT_NEEDED
+        5) dyn_strtab=$d_un ;; # DT_STRTAB
+        10) dyn_strsz=$d_un ;; # DT_STRSZ
+      esac
+    done
+  fi
+
+  if [ "$dyn_strtab"  -a "$dyn_strsz"  -a "$name_offsets" ] ; then
+    StrTab=$(RAW $dyn_strtab $dyn_strsz 'stringtable' | $BB tr '\0' ' ')
+    for name_offset in $name_offsets ; do
+      Library=${StrTab:$name_offset} # Starts at offset
+      Library=${Library%% *} # Ends at space
+      echo "$Library"
+    done
+  fi
+
+} # parse_elf_info
+
+
+SORT () {
+  echo "$@" | $BB tr ' ' '\n' | $BB sort -u | $BB tr -s '\n' | $BB tr '\n' ' ';
+}
+
+
+# Check if list contains item
+#   Has <list> <item>
+Has () {
+  case " $1 " in *" $2 "*) return 0 ;; esac
+  return 1
+}
+
+
+LibPaths='
+/usr/lib
+/lib
+/usr/local/lib
+'
+
+find_lib () {
+  local R=$ROOT
+  case "$1" in
+    /*)
+      [ -e "$1" ] && echo "$1" && return
+      [ -e "$R$1" ] && echo "$R$1" && return
+    ;;
+  esac
+  for M in '/' '32/' '64/' ; do
+    for P in $LibPaths ; do
+      [ -e "$R$P$M$1" ] && echo "$R$P$M$1" && return
+    done
+  done
+  Warn "Can't resolve path to $1"
+}
+
+
+# Return a list of full pathnames to dependencies.
+# If dependency basename is the same as "interpreter" skip it.
+#  GetDeps <filename> <interpreter>
+GetDeps () {
+  local Deps=$(parse_elf_info "$1" -d | tr '\n' ' ')
+  for F in $Deps ; do 
+    [ "$F" = "$2" ] || find_lib "$F"
+  done
+}
+
+# Return the name of the interpreter, e.g. /lib/ld-linux-x86-64.so.2
+GetInterp () {
+  parse_elf_info "$1" -i
+}
+
+
+# Print absolute path from relative path without resolving symlinks.
+# If the directory portion of the path does not actually exist,
+# just return the original relative path. Only intended to work
+# for our specific use case, this is NOT a general-purpose function!
+#   RealPath <filename>
+RealPath () {
+  local d
+  case "$1" in
+    */*) d=${1%/*} ;;
+    *) d=. ;;
+  esac
+  local ok=$(cd "$d" && pwd) && d=$ok
+  echo "$d/${1##*/}"
+}
+
+
+# If any of the files are symbolic links, resolve the link and
+# add it the list of link targets. We do this in a loop so we
+# can resolve a symlink-to-a-symlink etc.
+#   GetLinkTargets <Deps>
+GetLinkTargets () {
+  local Deps="$@"
+  local LinkTargets=""
+  for Dep in $Deps ; do
+    if [ -L "$Dep" ] ; then
+      Trg=$Dep
+      while : ; do
+        cd $($BB dirname $Trg)
+        Trg=$(RealPath $($BB readlink $Trg))
+        LinkTargets="$LinkTargets $Trg"
+        [ -L "$Trg" ] || break
+      done
+    fi
+  done
+  SORT "$Deps $LinkTargets"  
+}
+
+
+ResolveDeps () {
+  local File=$1
+  local InterpPath=$2
+  [ "$InterpPath" ] && InterpName=${InterpPath##*/}
+  local Deps=$(GetDeps "$File" "$InterpName")
+  local DepCount=0
+  if ! [ "$InterpPath" ] ; then
+  for Dep in $Deps; do DepCount=$((DepCount+1)) ; done
+    if [ $DepCount -eq 0 ] ; then
+      Warn "No dynamic linker information found in $File"
+      echo $File
+      return
+    fi
+  fi
+
+  Deps="$File $Deps $InterpPath"
+  Visited="$File"
+  Deps=$(SORT $Deps)
+  while [ "$Deps" != "$Visited" ] ; do
+    for Dep in $Deps ; do
+      [ "$Dep" = "$InterpName" ] && continue
+      if ! Has "$Visited" "$Dep" ; then
+        NewDeps=$(GetDeps "$Dep" "$InterpName")
+        Visited=$(SORT $Visited $Dep)
+        Deps=$(SORT $NewDeps $Deps)
+      fi
+    done
+  done
+  Deps=$(GetLinkTargets $Deps)
+  for F in $Deps; do echo $F; done
+}
+
+Expand () {
+  case "$1" in
+    /*) echo "$1" && return 0 ;;
+    */*) $BB realpath "$1" && return 0 ;;
+    *) type -p "$1" && return 0 ;;
+  esac
+  Warn "Can't find $1"
+  return 1
+}
+
+
+# On many recent distros, /lib is a just symbolic link to /usr/lib.
+# This adds a bit of confusion if we want to copy those libraries
+# to an old-style filesystem with separate /lib and /usr/lib. 
+# For the most part it should "just work" but some care is needed
+# in handling the interpreter, its path is hard-coded into executables,
+# but is also listed without a path when referenced by some libraries.
+# So we need to take care to list it by its hard-coded name
+# (usually in /lib) and NOT include a second copy in /usr/lib.
+
+for F in "$@" ; do [ "$F" = '-q' ] && BeQuiet=1 ; done
+
+All=$(
+  for F in "$@" ; do
+    [ "$F" = '-q' ] && continue
+    F=$(Expand "$F") || continue
+    InterpPath=$(GetInterp "$F")
+    ResolveDeps "$F" "$InterpPath"
+  done
+)
+
+for F in $(SORT $All); do echo $F; done
+

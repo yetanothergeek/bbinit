@@ -1,0 +1,108 @@
+#!/bin/busybox sh
+
+# ----------------------------------------------------------------------- *
+#
+#  Adapted from memdiskfind.c by H. Peter Anvin, Copyright 2010 Intel Corp.
+#  This shell script written 2017 by Jeff Pohlmeyer <yetanothergeek@gmail.com>
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+#  Boston MA 02110-1301, USA; either version 2 of the License, or
+#  (at your option) any later version; incorporated herein by reference.
+#
+# ----------------------------------------------------------------------- */
+#
+# Simple utility to search for a MEMDISK instance and output the parameters
+# needed to use the "phram" driver in Linux to map it.
+
+
+memlimit() {
+  local range= colon= user= maxram=0 start=0 stop=0
+  local limit=655360 #0xa0000
+  while read range colon user; do
+    [ "$user" = "System RAM" ] || continue;
+    start=$(printf %d 0x${range%-*})
+    [ $start -ge $limit ] && continue;
+    stop=$(printf %d 0x${range#*-})
+    [ $stop -ge $limit ] && maxram=$limit || maxram=$(( stop + 1 ))
+  done < "/proc/iomem"
+  echo $maxram;
+}
+
+
+# Use getconf if available; else some racey calculations in /proc/; else 4096
+get_page_size() {
+  type -p getconf &> /dev/null && getconf PAGESIZE 2> /dev/null && return
+  local sz nr kb # Ugly hack
+  sz=$(awk '/^Mapped:/    {print $2}' /proc/meminfo 2>/dev/null) && \
+  nr=$(awk '/^nr_mapped / {print $2}' /proc/vmstat  2>/dev/null) && \
+  kb=$(echo $sz $nr  | awk '{printf("%.0f\n",$1/$2)}' 2>/dev/null) && \
+  [ $((kb%2)) -eq 0 ] && echo $((kb*1024)) && return
+  echo 4096 # If all else fails
+}
+
+
+MBFT_MIN_LENGTH=$((36+4+26)) # acpi+safehook+mdi
+
+
+# Try to read and validate a memdisk Boot Firmware Table (mBFT) at this address
+# If we succeed, print the memdisk address and length, then exit the script
+exit_if_found () {
+  local mbft=$1
+  local space=$2
+  sig=$(hexdump -s $mbft -n 4 -e '1/4 "%.4s"' /dev/mem)
+  [ "$sig" = 'mBFT' ] || return 1
+  eval $(hexdump -s $mbft -n 70 -e '
+  1/4 "sig=%.4s;" 
+  1/4 "len=%d;" 
+  1/1 "rev=%d;" 
+  1/1 "sum=%d;" 
+  1/6 "oem=%.6s;"
+  1/8 "tbl=%s;" 
+  1/4 "orev=%d;"
+  1/4 "comp=%s;"
+  1/4 "crev=%d;"
+  1/4 "hook=%d;"
+  1/2 "bytes=%d;"
+  1/1 "vmnr=%d;"
+  1/1 "vmjr=%d;"
+  1/4 "dbuf=%d;"
+  1/4 "dsize=%d;"
+  1/4 "cmdln=%d;"
+  1/4 "old13=%d;"
+  1/4 "old15=%d;"
+  1/2 "dosm=%d;"
+  1/1 "boot=%d;"
+  1/1 "sect=%d;"
+  1/2 "dptp=%d;"
+  ' /dev/mem) 2> /dev/null || return 1
+  # [Probably should have checked (length<=space) BEFORE reading other stuff.]
+  [ $len -le $space ] || return 1
+  [ $len -ge $MBFT_MIN_LENGTH ] || return 1
+  [ $len -eq $((bytes+36+4)) ] || return 1
+  equation=$(hexdump -s $mbft -n $len -e $len'/1 "+%d"' /dev/mem) # for checksum
+  total=$(( $equation )) # Sum of all bytes in struct should divide evenly by 8
+  [ $(( $total % 8)) -eq 0 ] || return 1
+  [ $sect -eq 0 ] && sect=9
+  printf "%#x,%#x\n" "$dbuf" "$((dsize<<sect))" # print phram-friendly result
+  exit 0
+}
+
+
+main () {
+  [ -r /dev/mem ] || exit 1
+  local page=$(get_page_size)
+  local mapbase=$(memlimit)
+  mapbase=$(( mapbase & ~(page - 1) ));
+  local p=$mapbase
+  local max=655360
+  while [ $p -lt $max ]; do
+    exit_if_found $p $((max-p))
+    p=$((p+16))
+  done
+  exit 1
+}
+
+main
+

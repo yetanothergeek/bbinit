@@ -1,0 +1,12 @@
+#!/bin/busybox sh
+
+main () {
+  local arg=
+  local BB=/bin/busybox
+  for arg in $($BB cat '/proc/cmdline'); do
+    [ "$arg" = 'openrc' ] && exec /sbin/rc default
+  done
+}
+
+main
+

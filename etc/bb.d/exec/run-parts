@@ -1,0 +1,11 @@
+#!/bin/busybox sh
+
+for ARG in "$@" ; do
+  case "$ARG" in
+    -*) ;;
+    *) [ -d "$ARG" ] && exec /bin/busybox run-parts "$@" ;;
+  esac
+done
+
+exit 0
+

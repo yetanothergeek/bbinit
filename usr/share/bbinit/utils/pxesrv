@@ -1,0 +1,266 @@
+#!/bin/busybox sh
+
+# Script to set up a PXE server using syslinux and busybox.
+
+set -e
+
+WKDIR=
+BB='/bin/busybox'
+
+
+trap '
+if [ -d "$WKDIR" ]; then
+ for P in udhcpd httpd ftpd; do
+  if [ -f $WKDIR/$P.pid ]; then
+   $BB kill $($BB cat $WKDIR/$P.pid) || :
+  fi
+ done
+ $BB rm -r $WKDIR
+fi
+' INT EXIT
+
+
+die () { echo "ERROR: $1" >&2;  exit 1; }
+exist_or_die () { [ -e "$1" ] || die "File not found: $1"; }
+isreg_or_die () { [ -f "$1" ] || die "'$1' is not a regular file"; }
+
+
+help () {
+cat << EOF
+Usage:
+ ${0##*/} -b <image>  [options]
+ ${0##*/} -k <kernel> [ -f <initrd> ]  [options]
+
+Options:
+  -b <image>  Full path and filename of disk image (or .iso) file
+  -k <kernel> Full path and filename of kernel
+  -f <initrd> Full path and filename of initramfs
+  -a <list>   Quoted list of additional kernel (or memdisk) parameters
+  -l <addr>   Local ip address to listen on
+  -i <name>   Network interface name to listen on
+  -r <addr>   Remote ip address to be handed out by DHCPD
+  -s <dir>    Syslinux directory containing "pxelinux.0" etc.
+  -p <proto>  Server protocol (tftp, ftp, http)
+
+One of either -b or -k is required (but not both).
+-f is optional and can only be used with -k.
+One of -l or -i are required. Both may be used but pointless.
+-r is required, currently only a single client address is supported.
+-s is optional, unless the script can't find the syslinux files.
+-p is optional, defaults to tftp. Expect problems with plain ftp.
+-a is optional to "append" kernel or memdisk parameters.
+
+This script makes a temporary copy of ALL required files. Therefore,
+booting from a large ISO or other large file is not very efficient.
+
+EOF
+exit 0
+}
+
+[ $# -eq 0 ] && help || :
+
+unset BOOT_IMG KERNEL INITRD LOCAL_IP REMOTE_IP NET_DEV SYSLINUX_DIR PROTO
+
+while getopts b:k:f:a:l:r:i:s:p:h OPT; do
+  case $OPT in
+    b) BOOT_IMG=$OPTARG ;;
+    k) KERNEL=$OPTARG ;;
+    f) INITRD=$OPTARG ;;
+    a) APPEND=$OPTARG ;;
+    l) LOCAL_IP=$OPTARG ;;
+    r) REMOTE_IP=$OPTARG ;;
+    i) NET_DEV=$OPTARG ;;
+    s) SYSLINUX_DIR=$OPTARG ;;
+    p) PROTO=$OPTARG ;;
+    h) help ;;
+    \?) exit 1 ;;
+  esac
+done
+
+if [ -n "$PROTO" ] ; then
+  case "$PROTO" in
+    http|tftp) ;;
+    ftp)
+     echo \
+     "*** Anonymous FTP is disabled in many busybox builds. Expect problems." \
+     1>&2
+    ;;
+    *) die "Unsupported server protocol: '$PROTO'" ;;
+  esac
+else
+  PROTO='tftp'
+fi
+
+if [ -n "$BOOT_IMG" ] ; then
+  [ -z "$KERNEL" ] || die "Cannot use -b and -k together"
+  [ -z "$INITRD" ] || die "Cannot use -b and -f together"
+  exist_or_die "$BOOT_IMG"
+  BOOT_IMG=$($BB readlink -f $BOOT_IMG)
+  isreg_or_die "$BOOT_IMG"
+else
+  [ -n "$KERNEL" ] || die 'You must specify a disk image or kernel file to boot'
+  exist_or_die "$KERNEL"
+  KERNEL=$($BB readlink -f $KERNEL)
+  isreg_or_die "$KERNEL"
+  if [ -n "$INITRD" ] ; then
+    exist_or_die "$INITRD"
+    INITRD=$($BB readlink -f $INITRD)
+    isreg_or_die $INITRD
+  fi
+fi
+
+
+if [ -n "$SYSLINUX_DIR" ]; then
+  SYSLINUX_DIR=$($BB readlink -f "$SYSLINUX_DIR")
+else
+  for D1 in '/' '/usr/' '/usr/local/'; do
+    for D2 in '/lib/' '/share/'; do
+      for D3 in '/' '/bios/'; do
+        if [ -f "$D1/$D2/syslinux/$D3/pxelinux.0" ]; then
+          SYSLINUX_DIR=$($BB readlink -f "$D1/$D2/syslinux/$D3/")
+          break
+        fi
+      done
+      [ -n "$SYSLINUX_DIR" ] && break || :
+    done
+    [ -n "$SYSLINUX_DIR" ] && break || :
+  done
+fi
+
+[ -n "$SYSLINUX_DIR" ] || die "Could not find syslinux directory"
+[ -d "$SYSLINUX_DIR" ] || die "Invalid syslinux directory: $SYSLINUX_DIR"
+
+for F in 'ldlinux.c32' 'pxelinux.0' 'memdisk'; do
+  [ -e "$SYSLINUX_DIR/$F" ] || die "File not found: $F"
+  [ -f "$SYSLINUX_DIR/$F" ] || die "Invalid file: $F"
+done
+
+
+[ -n "$REMOTE_IP" ] || die 'You must specify a remote IP address (to be handed out by DHCP)'
+
+
+if [ -z "$NET_DEV" ] && [ -z "$LOCAL_IP" ]; then
+  die 'You must specify either a local IP address or a network interface to listen on'
+fi
+
+if [ -n "$NET_DEV" ]; then
+  $BB ifconfig "$NET_DEV" > /dev/null || die "Invalid network interface: $NET_DEV"
+  if [ -z "$LOCAL_IP" ]; then
+    LOCAL_IP=$($BB ifconfig "$NET_DEV" | $BB awk '/^ *inet addr:/ {sub(/:/," "); print $3}')
+  fi
+else
+  if [ -n "$LOCAL_IP" ]; then
+    for IF in $($BB ifconfig | $BB awk '/^[^ \t]/ {print $1}'); do
+      if $BB ifconfig $IF | $BB grep -q "^ *inet addr:${LOCAL_IP//./\\.} "; then
+        NET_DEV=$IF
+        break
+      fi
+    done
+  fi
+fi
+
+
+[ -n "$NET_DEV" ]  || die "Can't find network interface for local address '$LOCAL_IP'"
+[ -n "$LOCAL_IP" ] || die "Can't find IP address for network interface '$NET_DEV'"
+
+
+[ -n "$TEMP" ] || TEMP='/tmp'
+WKDIR=$($BB mktemp -d "$TEMP/pxe-XXXXXX")
+
+cd "$WKDIR"
+
+[ $PROTO = 'tftp' ] && BOOTFILE=pxelinux.0 || BOOTFILE='lpxelinux.0'
+
+$BB cat << EOF > "$WKDIR/udhcpd.conf"
+start $REMOTE_IP
+end $REMOTE_IP
+sname $LOCAL_IP
+max_leases 1
+interface $NET_DEV
+pidfile $WKDIR/udhcpd.pid
+lease_file $WKDIR/udhcpd.leases
+option bootfile $BOOTFILE
+option pxeconffile pxelinux.cfg/default
+EOF
+
+for SRC in \
+  "$BOOT_IMG" \
+  "$KERNEL" \
+  "$INITRD" \
+  "$SYSLINUX_DIR/ldlinux.c32" \
+  "$SYSLINUX_DIR/pxelinux.0" \
+  "$SYSLINUX_DIR/memdisk"
+do
+  [ "x$SRC" = 'x' ] && continue
+  DST=$WKDIR/$($BB basename "$SRC")
+  [ -e "$DST" ] || $BB cp -ai "$SRC" "$DST"
+done
+
+cp -a "$SYSLINUX_DIR/." "$WKDIR/."
+mkdir -p "$WKDIR/pxelinux.cfg"
+
+case "$PROTO" in
+  tftp) HOST_PATH= ;;
+  ftp) HOST_PATH="$PROTO://$LOCAL_IP/" ;;
+  http) HOST_PATH="$PROTO://$LOCAL_IP/" ;;
+esac
+
+echo HOST_PATH=$HOST_PATH
+
+if [ -n "$BOOT_IMG" ]; then
+IMG_TYPE=
+for A in $APPEND; do
+  case "$A" in
+    floppy|floppy=*|harddisk|harddisk=*|iso|raw) IMG_TYPE=$A ;;
+  esac
+done
+if [ -z "$IMG_TYPE" ] ; then
+  for A in $($BB blkid "$BOOT_IMG") ; do
+    case "$A" in
+      TYPE=*iso*)
+        IMG_TYPE=iso
+        APPEND="$APPEND $IMG_TYPE"
+      ;;
+    esac
+  done
+fi
+if [ -z "$IMG_TYPE" ]; then
+  case $BOOT_IMG in 
+    *.iso) APPEND="$APPEND iso" ;;
+  esac
+fi
+cat <<  EOF > "$WKDIR/pxelinux.cfg/default"
+default pxe
+label pxe
+  kernel  ${HOST_PATH}memdisk
+  append $APPEND initrd=${HOST_PATH}$($BB basename $BOOT_IMG)
+EOF
+else
+cat <<  EOF > "$WKDIR/pxelinux.cfg/default"
+default pxe
+label pxe
+  linux ${HOST_PATH}$($BB basename $KERNEL)
+EOF
+if [ -n "$INITRD" ]; then
+  APPEND="initrd=${HOST_PATH}$($BB basename $INITRD) $APPEND"
+fi
+echo append $APPEND >> "$WKDIR/pxelinux.cfg/default"
+fi
+
+$BB udhcpd -I "$LOCAL_IP" "$WKDIR/udhcpd.conf"
+
+case "$PROTO" in
+http)
+  $BB httpd -f -p "$LOCAL_IP:80" -h "$WKDIR" &
+  echo $! > "$WKDIR/httpd.pid"
+;;
+ftp)
+  $BB tcpsvd -vE "$LOCAL_IP" 21 $BB ftpd -vv "$WKDIR" &
+  echo $! > "$WKDIR/ftpd.pid"
+;;
+esac
+
+$BB udpsvd -E "$LOCAL_IP" 69 $BB tftpd -r "$WKDIR"
+
+
+

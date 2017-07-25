@@ -1,0 +1,265 @@
+#!/bin/busybox sh
+
+DEBUG () { echo -en "$@" 1>&2; }
+
+WARN () { printf "*** Warning: %s" "$@" 1>&2; }
+
+resolve_alias () {
+  case "$@" in
+    pci:*) lookup_pci "$@" ;;
+    usb:*) lookup_usb "$@" ;;
+    *) lookup_etc "$@" ;;
+  esac
+}
+
+
+get_deps () {
+  $BB grep "$@" $MODULES_SRC_DIR/modules.dep | $BB sed -e 's/://' -e 's/ /\n/g'
+}
+
+
+
+list_modules () {
+  local blacklist='./tmp/blacklist'
+  local modalias='./tmp/modalias'
+  local caselist='./tmp/caselist'
+  local case_tmp='./tmp/case_tmp'
+  local table='./tmp/table'
+  local modlist='./tmp/modlist'
+  if [ "$BBI_IGNORE_HOST" != '1' ] ; then
+    DEBUG "Generating lookup tables... "
+    
+    # Exclude blacklisted modules, if any
+    if [ -d /etc/modprobe.d/ ] ; then
+      $BB cp -r /etc/modprobe.d ./etc/.
+      $BB find ./etc/modprobe.d/ -type f -name '*.conf' -exec cat {} + | \
+      $BB awk ' /^[ \t]*blacklist[ \t]/ {
+        gsub(/[-_]/,"[-_]");
+        printf("\\<%s$\n", $2);
+      }' > $blacklist
+      $BB grep -v -f $blacklist $MODULES_SRC_DIR/modules.alias > $modalias
+    else
+      $BB cp $MODULES_SRC_DIR/modules.alias $modalias
+    fi
+    
+    # Format each alias into a shell-style case expression
+    $BB awk '
+    /^alias / {
+      sub(/^alias +/,"");
+      a=substr($0,1,length($0)-length($NF))
+      sub(/ $/,"",a)
+      sub(/[-_]/,"[-_]",a)
+      gsub(/ /,"\\ ",a)
+      printf("%s) echo %s ;;\n",a,$NF);
+    }
+    ' $modalias | $BB sort -ur > $caselist
+    
+    # Separate case expressions into three tables for faster lookups
+    for sys in pci usb; do
+      echo "lookup_$sys () { case \"\$@\" in " > $table.$sys
+      $BB grep "^$sys:" $caselist >> $table.$sys
+      echo '*) echo $1 ;; esac; }' >> $table.$sys
+      . $table.$sys
+      $BB grep -v "^$sys:" $caselist > $case_tmp
+      $BB mv $case_tmp $caselist
+    done
+    
+    # Anything that's not pci or usb goes into "etc" table
+    echo 'lookup_etc () { case "$@" in ' > $table.etc
+    $BB cat $caselist >> $table.etc
+    echo '*) echo $1 ;; esac; }' >> $table.etc
+    . $table.etc
+    
+    DEBUG "    done.\n"
+    
+    DEBUG "Scanning /sys for modules... "
+    
+    # Rummage through the /sys/ directory for module aliases and resolve
+    # the actual module filenames, along with any dependencies
+    $BB find /sys -name modalias -exec $BB cat {} + | $BB sort -u | \
+    while read Alias; do
+      resolve_alias "$Alias"
+    done | $BB sort -u | while read Module; do
+      get_deps "/${Module//[-_]/[-_]}\.ko\(\.[gx]z\)*:"
+    done > $modlist
+    DEBUG "    done.\n"
+  else
+   $BB cp $MODULES_SRC_DIR/modules.alias $modalias
+   > $modlist
+   touch ./etc/autoscan
+  fi
+  DEBUG "Adding user-specified modules... "
+  # Resolve filenames and dependencies for any user-specified modules
+  for Module in $BBI_EXTRA_MODULES; do
+    get_deps "/${Module//[-_]/[-_]}\.ko\(\.[gx]z\)*:"
+  done >> $modlist
+  DEBUG "    done.\n"
+  # Send the results to stdout, the caller will deal with it from there
+  $BB sort -u $modlist | $BB sed 's#^#'"$KVER/"'#'
+}
+
+
+exclude_module_dir () {
+  local module_dir
+  for module_dir in $BBI_EXCLUDE_MDIRS ; do
+    echo "$1" | $BB grep -q "/$module_dir/" && return 0
+  done
+  return 1
+}
+
+
+get_host_busybox () {
+  [ "x$BBI_HOST_BUSYBOX" != 'x' ] || \
+  BBI_HOST_BUSYBOX=$(type -p busybox.static) || \
+  BBI_HOST_BUSYBOX=$(type -p busybox) 
+  if [ -f "$BBI_HOST_BUSYBOX" ] && [ -x "$BBI_HOST_BUSYBOX" ] ; then
+    BB="$BBI_HOST_BUSYBOX"
+  else
+    echo "$0: ERROR: Cannot run busybox!"
+    exit 1
+  fi
+}
+
+
+main () {
+
+  get_host_busybox
+
+  [ "x$BBI_MKRAMFS_CONF"  =  'x' ] && \
+    BBI_MKRAMFS_CONF='/etc/bb.d/conf/mkramfs.conf'
+
+  # We want current environment variables to take precedence over
+  # config file, so save current env to file, load config, re-load saved env.
+  if [ -f "$BBI_MKRAMFS_CONF" ] && [ -r "$BBI_MKRAMFS_CONF" ] ; then
+    local ENV_TMP=$($BB mktemp /tmp/bbinit_env.XXXXXX)
+    set > "$ENV_TMP"
+    . "$BBI_MKRAMFS_CONF"
+    . "$ENV_TMP"
+    $BB rm -f "$ENV_TMP"
+  fi
+
+  # Fallbacks in case these still aren't set
+  : ${BBI_COMPRESSOR:=gzip}
+  : ${BBI_EXCLUDE_MDIRS:=cpufreq gpu hotplug kvm sound watchdog}
+  : ${BBI_EXTRA_MODULES:=ext2 ext3 ext4}
+  : ${BBI_IGNORE_HOST:=0}
+  : ${BBI_MODULES_PATH:=/lib/modules}
+  : ${BBI_RAMFS_BUSYBOX:=$BB}
+  : ${BBI_RAMFS_INIT:=$($BB dirname $($BB readlink -f $0))/init}
+  : ${BBI_RAMFS_NAME:=ramfs}
+  : ${BBI_EXTRA_FILES_ROOT:=/}
+  : ${BBI_GZIP_MODULES:=0}
+
+  local TOPDIR=$($BB mktemp -td initramfs.XXXXXX)
+
+  [ -z "$KVER" ] && KVER=$($BB uname -r)
+
+  MODULES_SRC_DIR="$BBI_MODULES_PATH/$KVER"
+  MODULES_TRG_DIR="./lib/modules/$KVER"
+
+  case "$BBI_RAMFS_NAME" in 
+    */*) ;;
+    *) BBI_RAMFS_NAME="/boot/$BBI_RAMFS_NAME" ;;
+  esac
+  cd $TOPDIR || exit
+  $BB mkdir bin dev etc lib proc sys tmp usr usr/bin usr/sbin var
+  $BB cp $BBI_RAMFS_BUSYBOX bin/busybox
+  $BB chmod 755 bin/busybox
+  $BB cp $BBI_RAMFS_INIT ./init
+  $BB chmod 755 ./init
+  for SRC in $(list_modules) ; do
+    exclude_module_dir $SRC && continue
+    if [ -e "$BBI_MODULES_PATH/$SRC" ] ; then
+      TRG=./lib/modules/$($BB dirname $SRC)
+      $BB mkdir -p $TRG
+      $BB cp $BBI_MODULES_PATH/$SRC $TRG
+    else
+      $BB basename "$SRC" .gz >> missing
+    fi
+  done
+
+  if [ -e missing ] ; then
+    for M in $($BB sort -u missing) ; do 
+      WARN "missing module '$M'"
+    done
+    $BB rm -f missing
+  fi
+
+  if [ "$BBI_GZIP_MODULES" = '1' ] ; then
+    $BB find $MODULES_TRG_DIR/kernel/ -name '*.ko' | $BB sort | \
+    while read KO ; do
+      $BB gzip $KO
+    done
+  else
+    $BB find $MODULES_TRG_DIR/kernel/ -name '*.ko.gz' | $BB sort | \
+    while read GZ ; do
+      $BB gzip -d $GZ
+    done
+  fi
+
+  for EXT in builtin alias dep; do
+    F=$MODULES_SRC_DIR/modules.$EXT 
+    [ -e $F ] && $BB cp $F $MODULES_TRG_DIR/
+  done
+
+  case "$BBI_EXTRA_FILES_ROOT" in
+    */.) ;;
+    */) BBI_EXTRA_FILES_ROOT="$BBI_EXTRA_FILES_ROOT." ;;
+    *) BBI_EXTRA_FILES_ROOT="$BBI_EXTRA_FILES_ROOT/."
+  esac
+  if [ -d "$BBI_EXTRA_FILES_ROOT" ] ; then
+    for F in $BBI_EXTRA_FILES ; do
+      case "$F" in
+       /*) 
+         local D=.$($BB dirname "$F")
+         $BB mkdir -p "$D"
+         $BB yes n | $BB cp -ai "$BBI_EXTRA_FILES_ROOT$F" "$D"
+       ;;
+       *)
+         WARN "BBI_EXTRA_FILES paths must begin with / (skipping $F)"
+       ;;
+      esac
+    done
+  else
+    WARN "BBI_EXTRA_FILES_ROOT path not found: $BBI_EXTRA_FILES_ROOT"
+  fi
+
+  [ "$BBI_IGNORE_HOST" = '1' ] || \
+  $BB find "$MODULES_TRG_DIR/kernel/" -name '*.ko'  | $BB sort | \
+  while read KO ; do
+    echo $($BB basename $KO .ko) 
+  done > etc/modules
+
+  [ -e etc/mdev.conf ] || \
+  echo '$MODALIAS=.* 0:0 660 @modprobe "$MODALIAS" 2> /dev/null' > etc/mdev.conf
+
+  # Minimal profile for rescue shell
+  [ -e etc/profile ] || \
+cat << EOF > etc/profile
+alias reboot='sync; reboot -f'
+alias poweroff='sync; poweroff -f'
+alias halt='sync; halt -f'
+EOF
+
+  [ -f "$BBI_FIXUP" ] && [ -x "$BBI_FIXUP" ] && $BBI_FIXUP
+
+  DEBUG "Creating \"$BBI_RAMFS_NAME\"; $BBI_COMPRESSOR format... "
+  $BB find . | $BB grep -v '\./tmp/..*' | $BB cpio -H newc -o | \
+    $BBI_COMPRESSOR > $BBI_RAMFS_NAME
+  DEBUG "done.\n"
+  DEBUG $(
+    printf 'Created "%s" (%s entries, %sMB)\n' \
+    $BBI_RAMFS_NAME \
+    $($BB find . | $BB grep -v '\./tmp/..*' | $BB wc -l) \
+    $($BB stat -c %s $BBI_RAMFS_NAME | \
+    $BB awk '{printf("%0.2f\n", $1/(1024*1024))}')
+  )'\n'
+  [ "$BBI_KEEP_TMPFILES" = '1' ] || $BB rm -r $TOPDIR
+}
+
+
+KVER=$1
+[ "x$2" = 'x' ] || BBI_RAMFS_NAME=$2
+
+main
+

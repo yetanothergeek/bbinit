@@ -1,0 +1,41 @@
+#!/bin/busybox sh
+
+# Creates a more "generic" initramfs that should be more portable 
+# (and probably larger) than the default host-specific initramfs.
+
+[ -n "$1" ] && KVER=$1 || KVER=$(uname -r)
+[ -n "$2" ] && OUTFILE=$2 || OUTFILE='ramfs.big'
+[ -n "$BBI_MODULES_PATH" ] || BBI_MODULES_PATH='/lib/modules'
+
+# Returns basenames of all modules under the given directories
+all_mods_in () {
+  local d
+  for d in $@ ; do
+    find $BBI_MODULES_PATH/$KVER/kernel/$d -type f -name '*.ko*' | \
+    sed 's%^/.*/\(.*\)\.ko.*$%\1%'
+  done
+}
+
+FS_MODS='ext2 ext3 ext4 isofs'
+KBD_MODS='atkbd i8042'
+ATA_MODS=$(all_mods_in drivers/ata | grep -v legacy)
+STG_MODS='sd_mod usb_storage sr_mod loop'
+HID_MODS='hid hid_generic usbhid'
+USB_MODS=$(all_mods_in drivers/usb/storage)' usb-common'
+HCI_MODS=$(all_mods_in drivers/usb/host | grep '^[eoux]hci')
+MTD_MODS='mtdblock phram' # e.g. to mount iso from memdisk/pxe
+
+NET_MODS=
+for D in ethernet phy ppp usb; do 
+  TMP_MODS=$(all_mods_in drivers/net/$D)
+  NET_MODS="$NET_MODS $TMP_MODS"
+done
+
+export BBI_EXTRA_MODULES="$BBI_EXTRA_MODULES \
+$ATA_MODS $KBD_MODS $FS_MODS $STG_MODS $HID_MODS $USB_MODS $HCI_MODS \
+$MTD_MODS $NET_MODS"
+
+export BBI_IGNORE_HOST='1'
+
+/usr/share/bbinit/mkramfs $KVER $OUTFILE
+

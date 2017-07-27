@@ -1,5 +1,7 @@
 #!/bin/busybox sh
 
+# Script to test suitability of a busybox executable for use with bbinit.
+
 BB=/bin/busybox
 ReturnCode=0
 
@@ -40,6 +42,7 @@ case "$TestBB" in
   --help|-h) 
     echo 'Tests busybox suitability for use with bbinit'
     echo "Usage: ${0##*/} [/path/to/busybox]"
+    echo "Default test subject is /bin/busybox"
     exit 0
   ;;
 esac

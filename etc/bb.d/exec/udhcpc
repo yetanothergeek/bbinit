@@ -1,3 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
+
 exec /bin/busybox udhcpc --script /etc/bb.d/exec/udhcpc.sh "$@"
 

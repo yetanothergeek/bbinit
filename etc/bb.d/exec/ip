@@ -1,2 +1,4 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
+
 exec /bin/busybox ip $@

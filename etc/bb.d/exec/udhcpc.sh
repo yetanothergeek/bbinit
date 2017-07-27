@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 # script for udhcpc
 # Copyright (c) 2008 Natanael Copa <natanael.copa@gmail.com>

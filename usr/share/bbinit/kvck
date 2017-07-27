@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 # Kernel version check.
 

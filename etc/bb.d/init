@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 [ -f /etc/inittab ] && [ -f /etc/bb.d/conf/inittab ] && \
   ! /bin/busybox diff -q /etc/bb.d/conf/inittab /etc/inittab && \

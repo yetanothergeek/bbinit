@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 # Script to test suitability of a busybox executable for use with bbinit.
 

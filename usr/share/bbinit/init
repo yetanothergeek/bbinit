@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 # Adapted from http://wiki.sourcemage.org/HowTo%282f%29Initramfs.html
 # https://web.archive.org/web/20160306130505/http://wiki.sourcemage.org/HowTo(2f)Initramfs.html

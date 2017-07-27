@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 # Creates a more "generic" initramfs that should be more portable 
 # (and probably larger) than the default host-specific initramfs.

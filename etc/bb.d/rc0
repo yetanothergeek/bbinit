@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 
 # Shutdown any active TCP/UDP servers before bringing down

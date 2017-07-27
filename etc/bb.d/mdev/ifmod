@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 # The kmod version of modprobe silently ignores requests to load a 
 # built-in module, but busybox modprobe complains. Make it stop.

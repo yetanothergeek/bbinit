@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 # Script to set up a PXE server using syslinux and busybox.
 

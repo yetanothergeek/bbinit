@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 # Script to find shared library dependencies in an ELF binary file.
 # Yes, it's complicated. You could do the same thing faster

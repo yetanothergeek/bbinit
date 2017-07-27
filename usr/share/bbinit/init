@@ -15,7 +15,7 @@ FAIL () {
   $BB sh -l
 }
 
-INFO () { [ $loglevel -gt 1 ] && echo $@; }
+INFO () { [ $loglevel -gt 1 ] && echo $@ || : ; }
 
 do_mount () { INFO "Mounting $1 on $2"; $BB mount -t $1 $1 $2; }
 

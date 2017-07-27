@@ -83,7 +83,7 @@ if [ -e /etc/autoscan ] ; then
     do_modprobe $M 2> /dev/null
   done
   INFO "Loading filesystem modules"
-  for M in $($BB find "$MODULES_DIR/kernel/fs" -type f -name '*.ko') ; do
+  for M in $($BB find "$MODULES_DIR/kernel/fs" -type f -name '*.ko*') ; do
     for A in $($BB modinfo -F alias $M) ; do
       do_modprobe "$A" && break
     done

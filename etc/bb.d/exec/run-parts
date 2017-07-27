@@ -1,4 +1,5 @@
 #!/bin/busybox sh
+# -*- mode: sh; -*-
 
 for ARG in "$@" ; do
   case "$ARG" in

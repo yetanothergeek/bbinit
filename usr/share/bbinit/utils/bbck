@@ -7,7 +7,7 @@ ListNeededApplets () {
   local Scripts=
   local ScriptPaths='/etc/bb.d/ /usr/share/bbinit/'
   local ExcludeScripts='pxesrv'
-  ScriptPaths=$(for P in $ScriptPaths ; do echo "$ROOT$P"; done)
+  ScriptPaths=$(for P in $ScriptPaths ; do echo "$BBCK_SCRIPTS_ROOT$P"; done)
   ExcludeScripts=$(for S in $ExcludeScripts; do echo "\! -name $S"; done)
   for F in $($BB find $ScriptPaths -type f \! -name 'pxesrv' ) ; do
     case $($BB stat $F -c %A) in

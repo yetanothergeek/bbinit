@@ -259,7 +259,7 @@ LibPaths='
 '
 
 find_lib () {
-  local R=$ROOT
+  local R=$SOLISTER_ROOT
   case "$1" in
     /*)
       [ -e "$1" ] && echo "$1" && return

@@ -242,7 +242,7 @@ syslinux's "memdisk" loader.
 /usr/share/bbinit/utils/pxesrv:
 An easy-to-use script to run a PXE server using only syslinux and busybox.
 (PXE is a technology used to boot a computer from an operating system served
-over a netework connection.)
+over a network connection.)
 
 /usr/share/bbinit/utils/solister:
 A script to read an ELF executable file and output a list of shared library

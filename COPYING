@@ -39,3 +39,10 @@ from the "mdev-like-a-boss" project, Copyright (c) 2012, Piotr Karbowski;
 Please consult the license notice in the file for terms and conditions.
 
 ===========
+
+The "udhcpc.sh" script is adapted from Alpine Linux "default.script" 
+Copyright (c) 2008 Natanael Copa <natanael.copa@gmail.com>
+Released under terms of GPLv2.
+
+===========
+

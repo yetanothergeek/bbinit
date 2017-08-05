@@ -48,7 +48,8 @@ case "$TestBB" in
   ;;
 esac
 
-[ -f "$TestBB" ] || die "Cannot find $TestBB"
+[ -e "$TestBB" ] || die "Cannot find $TestBB"
+[ -f "$TestBB" ] || die "Cannot execute $TestBB (Wrong file type)"
 [ -x "$TestBB" ] || die "Cannot execute $TestBB (Permission denied)"
 
 echo "Testing $TestBB"

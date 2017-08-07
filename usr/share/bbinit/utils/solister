@@ -165,11 +165,13 @@ parse_elf_info () {
   [ "$ProgHdrs" ] || Die "Failed to read program headers"
   eval "$ProgHdrs" || Die "Failed to parse program headers"
 
+  vaddr=0
   for ProgHdr in $ProgHdrs; do
     eval "$ProgHdr"
     p_offset=$(MakeLong $p_offset1 $p_offset2)
     p_filesz=$(MakeLong $p_filesz1 $p_filesz2)
     case $(printf %d $p_type) in
+      1) [ "$p_flags" = '0x5' ] && vaddr=$(MakeLong $p_vaddr1 $p_vaddr2) ;;
       2)
         dyn_off=$p_offset
         dyn_size=$p_filesz
@@ -229,6 +231,7 @@ parse_elf_info () {
   fi
 
   if [ "$dyn_strtab"  -a "$dyn_strsz"  -a "$name_offsets" ] ; then
+    dyn_strtab=$((dyn_strtab-vaddr))
     StrTab=$(RAW $dyn_strtab $dyn_strsz 'stringtable' | $BB tr '\0' ' ')
     for name_offset in $name_offsets ; do
       Library=${StrTab:$name_offset} # Starts at offset

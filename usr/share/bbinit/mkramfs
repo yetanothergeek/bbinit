@@ -192,9 +192,14 @@ main () {
       $BB gzip $KO
     done
   else
-    $BB find $MODULES_TRG_DIR/kernel/ -name '*.ko.gz' | $BB sort | \
-    while read GZ ; do
-      $BB gzip -d $GZ
+    $BB find $MODULES_TRG_DIR/kernel/ -type f -name '*.ko.*' | $BB sort | \
+    while read M ; do
+      case $M in
+        *.ko.gz)  $BB gzip  -d $M ;;
+        *.ko.xz)  $BB xz    -d $M ;;
+        *.ko.bz2) $BB bzip2 -d $M ;;
+        *) WARN "Unsupported file extension:\n $M"
+      esac
     done
   fi
 

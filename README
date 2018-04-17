@@ -74,7 +74,7 @@ The script also recognizes these environment variables:
   BBI_COMPRESSOR:
     This tells the script which program should be used to compress
     the ramfs. Options include gzip, bzip2, or xz. The default is gzip.
-    To disable compression, use BBI_COMPRESSOR=cat .
+    To disable compression, use BBI_COMPRESSOR=cat
 
     Note that if you want to use xz compression, you must include the
     full path to the xz program to prevent the busybox shell from trying
@@ -139,7 +139,7 @@ The script also recognizes these environment variables:
     architecture.
 
   BBI_KEEP_TMPFILES:
-    The mkramfs scripts creates a temporary directory under /tmp/ with a
+    The mkramfs script creates a temporary directory under /tmp/ with a
     name in the form of "/tmp/initramfs.XXXXXX" (with the XXXXXX being 
     replaced by some random characters). This directory contains all the
     files and sub-directories used to create the initramfs image.
@@ -167,7 +167,7 @@ The script also recognizes these environment variables:
       BBI_EXTRA_FILES_ROOT=/media/cdrom
     then the files are copied into the initramfs as:
       /media/cdrom/sbin/e2fsck  =>  /sbin/e2fsck
-      /media/cdrom/usr/bin/nanp =>  /usr/bin/nano
+      /media/cdrom/usr/bin/nano =>  /usr/bin/nano
 
   BBI_FIXUP:
     Since there will likely be some unforeseen use cases where things are

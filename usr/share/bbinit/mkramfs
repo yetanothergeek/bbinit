@@ -110,14 +110,20 @@ exclude_module_dir () {
 
 
 get_host_busybox () {
-  [ "x$BBI_HOST_BUSYBOX" != 'x' ] || \
-  BBI_HOST_BUSYBOX=$(type -p busybox.static) || \
-  BBI_HOST_BUSYBOX=$(type -p busybox) 
+  if [ "x$BBI_HOST_BUSYBOX" = 'x' ] ; then
+    BBI_HOST_BUSYBOX=$(type -p busybox.static) || \
+    BBI_HOST_BUSYBOX=$(type -p busybox) 
+  fi
+  if [ "$BBI_HOST_BUSYBOX" = 'busybox' ] ; then
+    BBI_HOST_BUSYBOX=$(which busybox.static) || \
+    BBI_HOST_BUSYBOX=$(which busybox) 
+  fi
   if [ -f "$BBI_HOST_BUSYBOX" ] && [ -x "$BBI_HOST_BUSYBOX" ] ; then
     BB="$BBI_HOST_BUSYBOX"
   else
-    echo "$0: ERROR: Cannot run busybox!"
-    exit 1
+    WARN "$0 Cannot find prefered busybox executable, falling back to /bin/busybox"
+    BBI_HOST_BUSYBOX='/bin/busybox'
+    BB="$BBI_HOST_BUSYBOX"
   fi
 }
 

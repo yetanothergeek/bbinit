@@ -17,7 +17,7 @@ all_mods_in () {
   done
 }
 
-FS_MODS='ext2 ext3 ext4 isofs'
+FS_MODS='ext2 ext3 ext4 isofs crc32c_generic'
 KBD_MODS='atkbd i8042'
 ATA_MODS=$(all_mods_in drivers/ata | grep -v legacy)
 STG_MODS='sd_mod usb_storage sr_mod loop'

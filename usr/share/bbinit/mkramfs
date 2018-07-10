@@ -77,7 +77,7 @@ list_modules () {
     
     # Rummage through the /sys/ directory for module aliases and resolve
     # the actual module filenames, along with any dependencies
-    $BB find /sys -name modalias -exec $BB cat {} + | $BB sort -u | \
+    $BB find /sys/ -name modalias -exec $BB cat {} + | $BB sort -u | \
     while read Alias; do
       resolve_alias "$Alias"
     done | $BB sort -u | while read Module; do

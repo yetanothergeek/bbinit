@@ -41,6 +41,10 @@ printf "%d" $loglevel &> /dev/null || loglevel=2
 [ $loglevel -lt 1 ] && loglevel=1
 $BB dmesg -n $loglevel
 
+[ "x$modprobe_delay" != 'x' ] && \
+ printf "%d" "$modprobe_delay" &> /dev/null && \
+  [ "$modprobe_delay" -ge 0 ] || unset modprobe_delay
+
 [ $loglevel -eq 1 ] && printf "\r ${greeting//?/ } \r" || echo
 
 do_mount sysfs /sys
@@ -69,6 +73,10 @@ if type -p mdev &> /dev/null ; then
 fi
 
 do_modprobe () {
+  if [ "x$modprobe_delay" != 'x' ] ; then
+    echo modprobe $1
+    [ $modprobe_delay -gt 0 ] && sleep $modprobe_delay
+  fi
   $BB modprobe $1
 }
 

@@ -4,32 +4,8 @@
 case "$1" in
   start)
     echo "Hello from $0"
-    mkdir -p /var/log
-    busybox dmesg -n 2
-    busybox syslogd -l 6 -s 4096
-    busybox klogd -c 3
-    for F in /etc/sysctl.d/*.conf /etc/sysctl.conf ; do
-      [ -f "$F" ] && busybox sysctl -p "$F"
-    done
-    [ -f /etc/mactab ] && busybox nameif -c /etc/mactab
-    [ -f /etc/network/interfaces ] && /etc/bb.d/exec/ifup -a &
-    type -p haveged &> /dev/null && haveged
-    if type -p dbus-daemon &> /dev/null ; then
-      rm -f /run/dbus/pid /var/lib/dbus/machine-id
-      dbus-uuidgen > /etc/machine-id
-      mkdir -p /run/dbus
-      dbus-daemon --system
-    fi
-    if type -p alsactl &> /dev/null ; then
-      mkdir -p /run/lock
-      [ -f /var/lib/alsa/asound.state ] && alsactl restore || alsactl init
-    fi
-    if type -p gpm &> /dev/null ; then
-      gpm -m /dev/input/mice -t imps2
-    fi
   ;;
   stop)
-    type -p alsactl &> /dev/null && alsactl store
     echo "Goodbye from $0"
   ;;
 esac

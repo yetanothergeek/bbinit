@@ -8,7 +8,6 @@ set -e
 WKDIR=
 BB='/bin/busybox'
 
-
 trap '
 if [ -d "$WKDIR" ]; then
  for P in udhcpd httpd ftpd; do
@@ -172,6 +171,8 @@ cd "$WKDIR"
 
 [ $PROTO = 'tftp' ] && BOOTFILE=pxelinux.0 || BOOTFILE='lpxelinux.0'
 
+PXECFG='pxelinux.cfg/default'
+
 $BB cat << EOF > "$WKDIR/udhcpd.conf"
 start $REMOTE_IP
 end $REMOTE_IP
@@ -181,7 +182,7 @@ interface $NET_DEV
 pidfile $WKDIR/udhcpd.pid
 lease_file $WKDIR/udhcpd.leases
 option bootfile $BOOTFILE
-option pxeconffile pxelinux.cfg/default
+option pxeconffile $PXECFG
 EOF
 
 for SRC in \
@@ -230,14 +231,14 @@ if [ -z "$IMG_TYPE" ]; then
     *.iso) APPEND="$APPEND iso" ;;
   esac
 fi
-cat <<  EOF > "$WKDIR/pxelinux.cfg/default"
+cat <<  EOF > "$WKDIR/$PXECFG"
 default pxe
 label pxe
   kernel  ${HOST_PATH}memdisk
   append $APPEND initrd=${HOST_PATH}$($BB basename $BOOT_IMG)
 EOF
 else
-cat <<  EOF > "$WKDIR/pxelinux.cfg/default"
+cat <<  EOF > "$WKDIR/$PXECFG"
 default pxe
 label pxe
   linux ${HOST_PATH}$($BB basename $KERNEL)
@@ -245,7 +246,7 @@ EOF
 if [ -n "$INITRD" ]; then
   APPEND="initrd=${HOST_PATH}$($BB basename $INITRD) $APPEND"
 fi
-echo append $APPEND >> "$WKDIR/pxelinux.cfg/default"
+echo append $APPEND >> "$WKDIR/$PXECFG"
 fi
 
 $BB udhcpd -I "$LOCAL_IP" "$WKDIR/udhcpd.conf"
@@ -262,6 +263,4 @@ ftp)
 esac
 
 $BB udpsvd -E "$LOCAL_IP" 69 $BB tftpd -r "$WKDIR"
-
-
 

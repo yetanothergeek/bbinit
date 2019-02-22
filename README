@@ -286,6 +286,20 @@ for devices in the /dev directory. If your system already has a working
 file named /etc/mdev.conf you should create a symbolic link to
 /etc/bb.d/conf/mdev.conf.
 
+/etc/bb.d/task/:
+This directory contains the scripts needed to bring up the system at boot time,
+and to bring the system down cleanly for a shutdown or reboot. The scripts are
+sourced by the /etc/bb.d/rcS in natural sort order at startup, and in reverse 
+order by /etc/bb.d/rcO on shutdown. Each script may contain a function called 
+task_start() that is run at startup, and a function called task_stop() that
+is run at shutdown. The default scripts are numbered by 10's so it is possible
+to add your own scripts in between if you need to do anything special at a
+certain point during startup or shutdown. For instance:
+
+/etc/bb.d/task/010-do-something      # <= Some default system script.
+/etc/bb.d/task/015-my-script         # <= Custom script added by user.
+/etc/bb.d/task/020-something-else    # <= Another default system script.
+
 
 /etc/bb.d/rcS:
 This script runs at startup and is responsible for a number of system
@@ -293,12 +307,15 @@ initialization tasks including: checking and mounting the devices and
 filesystems described by /etc/fstab; setting up the hostname described
 by /etc/hostname; seeding the system's random number generator; setting
 up the loopback (127.0.0.1) device; and launching busybox's system event
-handlers (mdev and uevent)
+handlers (mdev and uevent) For the most part it simply reads the scripts
+in /etc/bb.d/task/ and runs their task_start() function.
 
 
 /etc/bb.d/rcO:
 This script runs at shutdown and is responsible for cleanly terminating
 processes, shutting down network interfaces, and umounting filesystems.
+Some of this work is accomplished by reading the /etc/bb.d/task/ scripts
+and running their task_stop() functions.
 
 
 /etc/bb.d/rc1:

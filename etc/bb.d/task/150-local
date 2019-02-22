@@ -1,0 +1,21 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# Launch rc.local script
+task_start () {
+local RCLOCAL=$($BB dirname $($BB readlink -f $0))/rc.local
+if [ -f "$RCLOCAL" -a -x "$RCLOCAL" ] ; then
+  echo 'Launching local startup script...'
+  "$RCLOCAL" start
+fi
+}
+
+
+task_stop () {
+local RCLOCAL=$($BB dirname $($BB readlink -f $0))/rc.local
+if [ -f "$RCLOCAL" -a -x "$RCLOCAL" ]  ; then 
+  echo 'Launching local shutdown script...'
+  "$RCLOCAL" stop
+fi
+}
+

@@ -1,0 +1,68 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# Determine root device, ensure it is mounted read-only, fsck it,
+# then remount it read-write, unless /etc/fstab says otherwise.
+task_start () {
+local rootdev=$($BB rdev)
+if [ "x$rootdev" != 'x' ]; then
+  local dev mnt typ opts ro
+  for dev in $rootdev; do rootdev=$dev; break; done
+  ro=0
+  while read dev mnt typ opts; do
+    if [ "$dev" = "$rootdev" ] && [ "$mnt" = '/' ]; then
+      case "$opts" in
+        ro|ro,*) ro=1 ;;
+        rw|rw,*) ro=0 ;;
+      esac
+      break
+    fi
+  done < /proc/mounts
+fi
+
+forcefsck=''
+[ -f /forcefsck ] && forcefsck='-f' || \
+for arg in $($BB cat /proc/cmdline); do
+  [ "$arg" = 'forcefsck' ] && forcefsck='-f' && break
+done
+
+if [ "$ro" = '0' ]; then
+  echo 'Warning! root fs is mounted read/write, skipping fsck!'
+  $BB sleep 5
+else
+  echo 'Root fs mounted read-only [good]'
+  local rv=0
+  local fstype=$($BB blkid $rootdev | $BB awk '{gsub(/.*TYPE="/, ""); gsub(/".*/,""); print}')
+  type -p fsck.$fstype > /dev/null && fsck_root=fsck.$fstype || fsck_root=fsck
+  $fsck_root -p $rootdev $forcefsck
+  rv=$?
+  if [ $rv -gt 1 ]; then
+    if [ $rv -gt 3 ]; then
+      echo 'Error: fsck encountered problems.'
+      echo 'Entering repair mode'
+      PS1='(Rescue) \#'
+      export PS1
+      $BB login
+    else
+      echo "Notice: fsck returned [$rv], requires reboot."
+    fi
+    $BB umount -a -r
+    $BB mount -n -o remount,ro /
+    echo 'Rebooting system.'
+    $BB sleep 5
+    $BB reboot -f
+  fi 
+  echo 'Remounting root fs read/write.'
+  $BB mount -w -v -n -o remount /
+  if [ $? -ne 0 ]; then
+    echo 'Error: remount of root fs read/write failed!'
+    $BB sleep 10
+  fi
+fi
+
+if [ "$($BB readlink /etc/mtab)" != '/proc/mounts' ] ; then
+  $BB rm -rf /etc/mtab
+  $BB ln -sf /proc/mounts /etc/mtab
+fi
+}
+

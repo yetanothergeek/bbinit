@@ -1,0 +1,21 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# Load any additional modules listed in /etc/modules
+task_start () {
+if [ -f /etc/modules ] && [ -d "$MODULES_DIR" ]; then
+  printf 'Loading modules...    '
+  local m=
+  while read m; do
+    [ "x$m" = 'x' ] && continue
+    case $m in
+      \#*) ;;
+      *) 
+        $BB modprobe $m
+      ;;
+    esac
+  done < /etc/modules
+  echo "done."
+fi
+}
+

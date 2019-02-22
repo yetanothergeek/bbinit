@@ -1,0 +1,11 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# haveged
+task_start () {
+if type -p haveged &> /dev/null ; then
+  echo 'Starting haveged daemon...'
+  haveged
+fi
+}
+

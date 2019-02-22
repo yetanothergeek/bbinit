@@ -1,0 +1,18 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# Restore alsa settings
+task_start () {
+if type -p alsactl &> /dev/null ; then
+  echo 'intializing ALSA...'
+  mkdir -p /run/lock
+  [ -f /var/lib/alsa/asound.state ] && alsactl restore || alsactl init
+fi
+}
+
+task_stop () {
+  type -p alsactl &> /dev/null && \
+  echo 'Saving ALSA settings...' && \
+  alsactl store
+}
+

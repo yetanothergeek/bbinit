@@ -1,0 +1,27 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# Start dbus daemon
+task_start () {
+# Set to non-zero to have a unique machine-id on each reboot
+local MakeNewMachID=0
+
+if type -p dbus-daemon &> /dev/null ; then
+  if type -p dbus-uuidgen &> /dev/null ; then
+    $BB rm -f /run/dbus/pid /var/lib/dbus/machine-id
+    if [ "$MakeNewMachID" != '0' ] ; then
+      dbus-uuidgen > /etc/machine-id
+    else
+      dbus-uuidgen --ensure=/etc/machine-id
+    fi
+  fi
+  local DBusDaemon=$(type -p dbus-daemon)
+  # Causes problems if daemon links to libsystemd and systemd isn't running.
+  if ! $BB grep -q libsystemd "$DBusDaemon"; then
+    echo 'Starting dbus daemon...'
+    $BB mkdir -p /run/dbus
+    dbus-daemon --system
+  fi
+fi
+}
+

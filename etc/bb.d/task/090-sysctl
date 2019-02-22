@@ -1,0 +1,13 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# Load sysctl configuration settings.
+task_start () {
+echo 'Loading sysctl settings...'
+local F
+for F in /etc/sysctl.d/*.conf /etc/sysctl.conf ; do
+  [ -f "$F" ] && $BB sysctl -p "$F"
+done
+unset F
+}
+

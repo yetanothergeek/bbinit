@@ -1,0 +1,11 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# Start gpm console mouse daemon
+task_start () {
+if type -p gpm &> /dev/null ; then
+  echo 'Starting gpm console mouse daemon...'
+  gpm -m /dev/input/mice -t imps2
+fi
+}
+

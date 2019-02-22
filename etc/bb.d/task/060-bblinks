@@ -1,0 +1,19 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# For short-lived busybox applet processes, we can just invoke them
+# with "busybox blah" but for long running processes (daemons) it 
+# is more convenient from a user perspective to have these processes
+# show up in "ps" output etc. by their real name rather than having
+# a bunch of processes all listed as "busybox". So we need symlinks
+# for each applet we want to show up as itself. But since /bin etc.
+# might be read-only, we will create these links under /run/bbinit.
+task_start () {
+bbinit_bindir='/run/bbinit/'
+$BB mkdir -p $bbinit_bindir
+
+for applet in klogd syslogd getty ; do
+  $BB ln -s '/bin/busybox' "$bbinit_bindir/$applet"
+done
+}
+

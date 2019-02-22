@@ -1,0 +1,31 @@
+#!/bin/false
+# -*- mode: sh; -*-
+
+# Mount /proc , /dev , /sys directories if they are not mounted already.
+task_start () {
+MntPtIsType () { $BB grep -q " $($BB readlink -f $1) $2 " /proc/mounts; }
+
+if [ -f /proc/mounts ] && MntPtIsType /proc proc && \
+   [ $($BB stat -c %d /) -ne $($BB stat -c %d /proc) ]
+then
+  :
+else
+  $BB mount -t proc proc /proc
+fi
+
+MntPtIsType /sys sysfs || $BB mount -t sysfs sysfs /sys
+MntPtIsType /dev devtmpfs  || $BB mount -t devtmpfs devtmpfs /dev
+
+if ! MntPtIsType /dev/pts devpts; then
+  $BB mkdir -p /dev/pts
+  $BB mount -t devpts devpts /dev/pts
+fi
+
+[ -c /dev/null ] || ( $BB rm -f /dev/null ; $BB mknod -m 666 /dev/null c 1 3 )
+[ -e /dev/fd ] || $BB ln -sf /proc/self/fd /dev/fd
+
+$BB ln -sf /proc/self/fd/0 /dev/stdin
+$BB ln -sf /proc/self/fd/1 /dev/stdout
+$BB ln -sf /proc/self/fd/2 /dev/stderr
+}
+

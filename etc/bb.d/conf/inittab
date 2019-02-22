@@ -3,12 +3,12 @@
 ::sysinit:/etc/bb.d/rcS
 ::wait:/etc/bb.d/rc1
 
-tty1::respawn:/bin/busybox getty -n -l /etc/bb.d/exec/autologin 0 tty1
-tty2::respawn:/bin/busybox getty 0 tty2
-tty3::respawn:/bin/busybox getty 0 tty3
-tty4::respawn:/bin/busybox getty 0 tty4
-tty5::respawn:/bin/busybox getty 0 tty5
-tty6::respawn:/bin/busybox getty 0 tty6
+tty1::respawn:/etc/bb.d/exec/getty -n -l /etc/bb.d/exec/autologin 0 tty1
+tty2::respawn:/etc/bb.d/exec/getty 0 tty2
+tty3::respawn:/etc/bb.d/exec/getty 0 tty3
+tty4::respawn:/etc/bb.d/exec/getty 0 tty4
+tty5::respawn:/etc/bb.d/exec/getty 0 tty5
+tty6::respawn:/etc/bb.d/exec/getty 0 tty6
 
 # Stuff to do for the 3-finger salute
 ::ctrlaltdel:/bin/busybox reboot

@@ -41,6 +41,7 @@ Options:
   -r <addr>   Remote ip address to be handed out by DHCPD
   -s <dir>    Syslinux directory containing "pxelinux.0" etc.
   -p <proto>  Server protocol (tftp, ftp, http)
+  -z          Send filename options as NULL-terminated strings.
 
 One of either -b or -k is required (but not both).
 -f is optional and can only be used with -k.
@@ -49,6 +50,7 @@ One of -l or -i are required. Both may be used but pointless.
 -s is optional, unless the script can't find the syslinux files.
 -p is optional, defaults to tftp. Expect problems with plain ftp.
 -a is optional to "append" kernel or memdisk parameters.
+-z is optional (Violates RFC but needed for some old, buggy clients.)
 
 This script makes a temporary copy of ALL required files. Therefore,
 booting from a large ISO or other large file is not very efficient.
@@ -59,9 +61,9 @@ exit 0
 
 [ $# -eq 0 ] && help || :
 
-unset BOOT_IMG KERNEL INITRD LOCAL_IP REMOTE_IP NET_DEV SYSLINUX_DIR PROTO
+unset BOOT_IMG KERNEL INITRD LOCAL_IP REMOTE_IP NET_DEV SYSLINUX_DIR PROTO STR_NULL
 
-while getopts b:k:f:a:l:r:i:s:p:h OPT; do
+while getopts b:k:f:a:l:r:i:s:p:zh OPT; do
   case $OPT in
     b) BOOT_IMG=$OPTARG ;;
     k) KERNEL=$OPTARG ;;
@@ -72,6 +74,7 @@ while getopts b:k:f:a:l:r:i:s:p:h OPT; do
     i) NET_DEV=$OPTARG ;;
     s) SYSLINUX_DIR=$OPTARG ;;
     p) PROTO=$OPTARG ;;
+    z) STR_NULL='yes' ;;
     h) help ;;
     \?) exit 1 ;;
   esac
@@ -173,6 +176,16 @@ cd "$WKDIR"
 
 PXECFG='pxelinux.cfg/default'
 
+hexopt () { printf "%s" "$@" | $BB hexdump -ve '/1 "%x"' ; }
+
+if [ "$STR_NULL" = 'yes' ] ; then
+  BOOTFILEOPT="option 0x43 $(hexopt $BOOTFILE)00"
+  CFGFILEOPT="option 0xd1 $(hexopt $PXECFG)00"
+else
+  BOOTFILEOPT="option bootfile $BOOTFILE"
+  CFGFILEOPT="option pxeconffile $PXECFG"
+fi
+
 $BB cat << EOF > "$WKDIR/udhcpd.conf"
 start $REMOTE_IP
 end $REMOTE_IP
@@ -181,8 +194,8 @@ max_leases 1
 interface $NET_DEV
 pidfile $WKDIR/udhcpd.pid
 lease_file $WKDIR/udhcpd.leases
-option bootfile $BOOTFILE
-option pxeconffile $PXECFG
+$BOOTFILEOPT
+$CFGFILEOPT
 EOF
 
 for SRC in \

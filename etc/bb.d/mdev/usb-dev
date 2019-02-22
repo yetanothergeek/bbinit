@@ -1,0 +1,23 @@
+#!/bin/busybox sh
+
+# If you want to run a script when a specific USB device is inserted or
+# removed, you can create the script in /etc/bb.b/usb/ and name it 
+# according to its device ID as shown in the output of the "lsusb" 
+# command, only substitute a dot '.' for the colon ':'. For example 
+# if lsusb identifies your device as "abcd:1234" you should create an
+# executable shell script named "/etc/bb.b/usb/abcd.1234" . Your script
+# should check the $ACTION environment variable to see if the event is 
+# "add" (device inserted) or "remove" (device removed). There are other 
+# possible values for $ACTION, for instance "bind" indicates a kernel 
+# module being loaded and bound to the device.
+
+if [ -n "$DEVPATH" ] ; then
+  d="/sys/$DEVPATH"
+  p="$d/idProduct"
+  v="$d/idVendor"
+  if [ -d "$d/" ] && [ -r "$p" ] && [ -r "$v" ] ; then
+    sh=/etc/bb.d/usb/$(cat "$v").$(cat "$p")
+    [ -f "$sh" ] && [ -x "$sh" ] && exec "$sh" "$@"
+  fi
+fi
+

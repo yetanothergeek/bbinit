@@ -5,204 +5,21 @@ export PATH=/sbin:/usr/sbin:/bin:/usr/bin
 
 rcs_main () {
 
-printf "Beginning %s\r" "$0" 1>&2
-printf "Beginning %s\n" "$0"
+printf 'Beginning %s [%s]\r' "$0" "$$" 1>&2
+printf 'Beginning %s [%s]\n' "$0" "$$"
 
 local BB='/bin/busybox'
-
-MntPtIsType () { $BB grep -q " $($BB readlink -f $1) $2 " /proc/mounts; }
-
-if [ -f /proc/mounts ] && MntPtIsType /proc proc && \
-   [ $($BB stat -c %d /) -ne $($BB stat -c %d /proc) ]
-then
-  :
-else
-  $BB mount -t proc proc /proc
-fi
-
-local arg
-for arg in $($BB cat '/proc/cmdline'); do
-  [ "$arg" = 'openrc' ] && exec /sbin/rc sysinit
-done
-unset arg
-
-MntPtIsType /sys sysfs || $BB mount -t sysfs sysfs /sys
-MntPtIsType /dev devtmpfs  || $BB mount -t devtmpfs devtmpfs /dev
-
-if ! MntPtIsType /dev/pts devpts; then
-  $BB mkdir -p /dev/pts
-  $BB mount -t devpts devpts /dev/pts
-fi
-
-[ -c /dev/null ] || ( $BB rm -f /dev/null ; $BB mknod -m 666 /dev/null c 1 3 )
-[ -e /dev/fd ] || $BB ln -sf /proc/self/fd /dev/fd
-
-$BB ln -sf /proc/self/fd/0 /dev/stdin
-$BB ln -sf /proc/self/fd/1 /dev/stdout
-$BB ln -sf /proc/self/fd/2 /dev/stderr
-
-local rootdev=$($BB rdev)
-if [ "x$rootdev" != 'x' ]; then
-  local dev mnt typ opts ro
-  for dev in $rootdev; do rootdev=$dev; break; done
-  ro=0
-  while read dev mnt typ opts; do
-    if [ "$dev" = "$rootdev" ] && [ "$mnt" = '/' ]; then
-      case "$opts" in
-        ro|ro,*) ro=1 ;;
-        rw|rw,*) ro=0 ;;
-      esac
-      break
-    fi
-  done < /proc/mounts
-fi
-
-if [ "$ro" = '0' ]; then
-  echo "Warning! root fs is mounted read/write, skipping fsck!"
-  $BB sleep 5
-else
-  echo "Root fs mounted read-only [good]"
-  local rv=0
-  local fstype=$($BB blkid $rootdev | $BB awk '{gsub(/.*TYPE="/, ""); gsub(/".*/,""); print}')
-  type -p fsck.$fstype > /dev/null && fsck_root=fsck.$fstype || fsck_root=fsck
-  $fsck_root -p $rootdev
-  rv=$?
-  if [ $rv -gt 1 ]; then
-    if [ $rv -gt 3 ]; then
-      echo "Error: fsck encountered problems."
-      echo "Entering repair mode"
-      PS1="(Rescue) \#"
-      export PS1
-      $BB login
-    else
-      echo "Notice: fsck returned [$rv], requires reboot."
-    fi
-    $BB umount -a -r
-    $BB mount -n -o remount,ro /
-    echo "Rebooting system."
-    $BB sleep 5
-    $BB reboot -f
-  fi 
-  echo "Remounting root fs read/write."
-  $BB mount -w -v -n -o remount /
-  if [ $? -ne 0 ]; then
-    echo "Error: remount of root fs read/write failed!"
-    $BB sleep 10
-  fi
-fi
-
-if [ "$($BB readlink /etc/mtab)" != '/proc/mounts' ] ; then
-  $BB rm -rf /etc/mtab
-  $BB ln -sf /proc/mounts /etc/mtab
-fi
-
-local mdev=$($BB which mdev 2> /dev/null)
-if [ "x$mdev" = 'x' ] ; then
-  if $BB --help mdev &>/dev/null; then
-    $BB ln -sf $BB /sbin/mdev && mdev=/sbin/mdev
-  fi
-fi
-
-if [ "x$mdev" != 'x' ] ; then
-  echo 'Initializing mdev'
-  if [ -e /proc/sys/kernel/hotplug ] ; then 
-    echo $mdev > /proc/sys/kernel/hotplug
-  else
-    local uevent=$($BB which uevent 2> /dev/null)
-    if [ "x$uevent" = 'x' ] ; then
-      if $BB --help uevent &>/dev/null; then
-        $BB ln -sf $BB /sbin/uevent && uevent=/sbin/uevent
-      fi
-    fi
-    [ "x$uevent" != 'x' ] && echo "Starting $uevent" && $uevent $mdev &
-  fi
-  $mdev -s
-fi
-
 local MODULES_DIR="/lib/modules/$($BB uname -r)"
-if [ -f /etc/modules ] && [ -d $MODULES_DIR ]; then
-  printf "Loading modules...    "
-  local m=
-  while read m; do
-    [ "x$m" = 'x' ] && continue
-    case $m in
-      \#*) ;;
-      *) 
-        $BB modprobe $m
-      ;;
-    esac
-  done < /etc/modules
-  echo "done."
-fi
+local include_file
 
-if [ -f /etc/fstab ]; then
-  echo "Mounting filesystems in /etc/fstab..."
-  local dev mtpt fstype opts freq passno rem  
-  $BB sed 's/\\040/\\ /g' /etc/fstab | while read dev mtpt fstype opts freq passno rem; do
-    case $opts in
-      *noauto*)
-        continue
-      ;;
-    esac
-    case $dev in
-      UUID=*|LABEL=*) dev=$($BB findfs "$dev") ;;
-    esac
-    case $dev in
-      /dev/*)
-        if [ "$mtpt" = '/' ]; then
-          mount -o "remount,$opts" "$mtpt"
-          continue;
-        fi
-        printf '%d' $passno &> /dev/null || passno=0
-        case $fstype in
-          ext[2-4]|vfat|msdos)
-            [ -d $MODULES_DIR ] && $BB modprobe $fstype 2> /dev/null
-            if type -p fsck.$fstype > /dev/null; then
-              if [ $passno -eq 0 ] || fsck.$fstype -p $dev || fsck.$fstype -p $dev; then
-                $BB mount -t $fstype -o $opts $dev $mtpt
-              fi
-            fi
-          ;;
-        esac
-      ;;
-    esac
-  done
-  $BB mkdir -p /dev/shm
-  $BB mount -a
-  $BB swapon -a
-  echo "fstab done."
-else
-  echo "/etc/fstab not found, skipping."
-fi
+task_start () { : ; }
+for include_file in /etc/bb.d/task/* ; do
+  [ -f $include_file ] && . $include_file && task_start
+  task_start () { : ; }
+done
 
-echo "Initializing random number generator..."
-local RANDOM_SEED='/var/lib/random-seed'
-if [ -f "$RANDOM_SEED" ]; then
-  $BB cat "$RANDOM_SEED" > /dev/urandom
-else
-  $BB mkdir -p "${RANDOM_SEED%/*}"
-  $BB touch "$RANDOM_SEED"
-fi
-$BB chmod 600 "$RANDOM_SEED"
-local POOLFILE=/proc/sys/kernel/random/poolsize
-local BYTES=4096
-[ -r "$POOLFILE" ] && BYTES=$($BB cat "$POOLFILE")
-
-( # Seed is saved on clean shutdown, but save now for unclean just in case. 
-  $BB sleep 5 # Wait a bit for entropy
-  $BB dd if=/dev/urandom of="$RANDOM_SEED" count=1 bs=$BYTES 2> /dev/null
-) &
-
-[ -f /etc/hostname ] && $BB hostname -F /etc/hostname
-
-$BB ifconfig lo 127.0.0.1 up netmask 255.0.0.0
-
-local RCLOCAL=$($BB dirname $($BB readlink -f $0))/rc.local
-
-[ -f "$RCLOCAL" -a -x "$RCLOCAL" ]  && "$RCLOCAL" start
-
-printf "Leaving %s\r" "$0" 1>&2
-printf "Leaving %s\n" "$0"
+printf 'Leaving %s\r' "$0" 1>&2
+printf 'Leaving %s\n' "$0"
 }
 
 rcs_main

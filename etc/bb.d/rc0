@@ -48,25 +48,29 @@ get_pid_list () {
 }
 
 
+stop_tasks () {
+  local reversed=''
+  for include_file in /etc/bb.d/task/* ; do
+    reversed="$include_file $reversed"
+  done
+  task_stop () { : ; }
+  for include_file in $reversed ; do
+    [ -f $include_file ] && . $include_file && task_stop
+    task_stop () { : ; }
+  done
+}
+
 
 rcz_main () {
 
 local BB='/bin/busybox'
-
-local arg
-for arg in $(${BB} cat '/proc/cmdline'); do
-  [ "$arg" = 'openrc' ] && exec /sbin/rc shutdown
-done
-unset arg
 
 cd /
 $BB chvt 1
 echo 'The system is going down for the count, NOW!' >&2
 $BB sleep 2
 
-local RCLOCAL=$($BB dirname $($BB readlink -f $0))/rc.local
-
-[ -f "${RCLOCAL}" -a -x "${RCLOCAL}" ]  && "${RCLOCAL}" stop
+stop_tasks
 
 $BB mount -t nfs | while read Dev on MtPt Etc ; do
   NfsSrv="${Dev%:*}"
@@ -122,14 +126,6 @@ for sig_spec in TERM KILL KILL; do
   done
   $BB sleep 1
 done
-
-echo "Saving random seed..."
-random_seed=/var/lib/random-seed
-$BB touch "${random_seed}"
-$BB chmod 600 "${random_seed}"
-poolfile=/proc/sys/kernel/random/poolsize
-[ -r "${poolfile}" ] && bytes=$($BB cat "${poolfile}") || bytes=4096
-$BB dd if=/dev/urandom of="${random_seed}" count=1 bs=$bytes 2> /dev/null
 
 N=0
 while [ $N -lt 10 ]; do

@@ -229,9 +229,10 @@ parse_elf_info () {
       esac
     done
   fi
-
+  # For reasons unknown to me, sometimes dyn_strtab is relative to vaddr,
+  # and sometimes not. But it should never be less than zero.
   if [ "$dyn_strtab"  -a "$dyn_strsz"  -a "$name_offsets" ] ; then
-    dyn_strtab=$((dyn_strtab-vaddr))
+    [ $dyn_strtab -ge $vaddr ] && dyn_strtab=$((dyn_strtab-vaddr)) # See above
     StrTab=$(RAW $dyn_strtab $dyn_strsz 'stringtable' | $BB tr '\0' ' ')
     for name_offset in $name_offsets ; do
       Library=${StrTab:$name_offset} # Starts at offset

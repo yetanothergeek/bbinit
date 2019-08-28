@@ -2,6 +2,18 @@
   
   Ramfs="$RootDir/boot/test.bbi"
   
+  if ! mountpoint -q '/sys' ; then
+    echo "/sys is not mounted."
+    echo "skipping creation of $Ramfs"
+    exit
+  fi
+
+  if ! [ -d /lib/modules/ ] ; then
+    echo "/lib/modules/ directory not found."
+    echo "skipping creation of $Ramfs"
+    exit
+  fi
+
   if [ "$Ask" = '-i' ] ; then
     printf "Shall I create an initramfs ($Ramfs) now? [Y/N]: "
     while read YN ; do

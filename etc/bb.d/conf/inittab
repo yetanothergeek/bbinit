@@ -1,7 +1,6 @@
 # /etc/inittab
 
 ::sysinit:/etc/bb.d/rcS
-::wait:/etc/bb.d/rc1
 
 tty1::respawn:/etc/bb.d/exec/getty -n -l /etc/bb.d/exec/autologin 0 tty1
 tty2::respawn:/etc/bb.d/exec/getty 0 tty2

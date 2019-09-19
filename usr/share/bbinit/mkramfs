@@ -51,6 +51,8 @@ list_modules () {
       sub(/ $/,"",a)
       sub(/[-_]/,"[-_]",a)
       gsub(/ /,"\\ ",a)
+      gsub(/\(/,"\\(",a)
+      gsub(/\)/,"\\)",a)
       printf("%s) echo %s ;;\n",a,$NF);
     }
     ' $modalias | $BB sort -ur > $caselist

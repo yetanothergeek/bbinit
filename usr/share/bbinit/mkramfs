@@ -3,7 +3,7 @@
 
 DEBUG () { echo -en "$@" 1>&2; }
 
-WARN () { printf "*** Warning: %s" "$@" 1>&2; }
+WARN () { printf "*** Warning: %s\n" "$@" 1>&2; }
 
 resolve_alias () {
   case "$@" in

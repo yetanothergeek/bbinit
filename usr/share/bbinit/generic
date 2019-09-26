@@ -4,6 +4,8 @@
 # Creates a more "generic" initramfs that should be more portable 
 # (and probably larger) than the default host-specific initramfs.
 
+ThisDir=$(dirname $(readlink -f "$0"))
+
 [ -n "$1" ] && KVER=$1 || KVER=$(uname -r)
 [ -n "$2" ] && OUTFILE=$2 || OUTFILE='ramfs.big'
 [ -n "$BBI_MODULES_PATH" ] || BBI_MODULES_PATH='/lib/modules'
@@ -38,5 +40,5 @@ $MTD_MODS $NET_MODS"
 
 export BBI_IGNORE_HOST='1'
 
-/usr/share/bbinit/mkramfs $KVER $OUTFILE
+$ThisDir/mkramfs $KVER $OUTFILE
 

@@ -1,0 +1,58 @@
+KERNEL COMMAND LINE PARAMETERS:
+Most bootloaders allow you to pass additional arguments to the kernel at
+boot-up. The initramfs created by bbinit recognizes and specifically handles
+the following kernel parameters:
+
+init=PROGRAM
+Tells the init script the path and name of the program on the root filesystem 
+to be executed after initramfs initialization process is complete. This program
+will have the process id (PID) of #1. The default is /sbin/init but in order 
+for bbinit to properly continue, this parameter should be set to
+init=/etc/bb.d/init
+
+
+root=DEVICE
+Tells the init script where to look for the root filesytem to switch to once 
+the initramfs initialization is complete. For example if your "real" Linux 
+installation is on the first partition of the first hard drive, you could say:
+  root=/dev/sda1
+
+The initramfs also recognizes the form of root=LABEL=XXX or root=UUID=XXX
+where XXX is the label or uuid of the root filesystem. 
+
+The special case of root=self is handled differently; rather than mounting a
+separate root filesystem, the initramfs will pass control to from /init to 
+its own /sbin/init (or whatever program you specified as init= on the kernel
+command line.) This may be useful for debugging purposes, and for situations
+where a separate filesystem is not easily accessible such as a PXE boot 
+environment.
+
+
+rootdelay=N
+Tells the init script to wait up to N seconds for the root device to appear. 
+This is needed particularly on USB devices which are sometimes slow to respond.
+The default is 20 seconds which is usually enough time for the device to appear
+but you might need to increase it if you have an unusually slow USB interface.
+Note that the script continues as soon as the device appears so there is 
+really nothing to gain by reducing the timeout to less than the default, 
+other than failing a little sooner if the device does not exist.
+
+
+loglevel=N
+Where N is a whole number between 1 and 8. This controls how much information
+is printed to the screen during boot-up, with a value 1 showing only critical
+error messages, and a value of 8 being maximum verbosity.
+
+quiet
+This parameter requires no arguments and is simply an alias for loglevel=1
+
+
+mdev.log
+This parameter requires no arguments and if present will tell mdev to log
+all device events to a file named /dev/mdev.log
+
+autologin=USER
+Tells bbinit to automatically login the user named USER on tty1 
+when boot-up is completed. ( This only works if 
+/etc/bb.d/conf/autologin.conf is set to AUTOLOGIN=? )
+

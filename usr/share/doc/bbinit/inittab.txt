@@ -1,0 +1,27 @@
+/etc/inittab => /etc/bb.d/conf/inittab:
+
+This file controls some aspects of the startup and shutdown of the 
+system, including the launching of the /etc/bb.d/rc* scripts and the 
+initialization of the tty terminals used for login. It is required
+when using the bbinit system. Unfortunately the path of /etc/inittab
+is hard-coded into busybox and therefore its location is 
+non-negotiable, so...
+
+THIS GETS TRICKY: In order for bbinit to coexist with another init system
+which requires a different adaptation of /etc/inittab, bbinit uses 
+this strategy:
+
+It stores its own version of inittab in /etc/bb.d/conf/. At boot-up, it checks
+whether the contents of /etc/bb.d/conf/inittab and /etc/inittab are identical.
+If they are, all is good, and no further action needs to be taken. But if
+the two files differ, bbinit will "bind mount" its own /etc/bb.d/conf/inittab
+over the existing /etc/inittab, thus masking the contents of the original 
+and preserving it for booting with the other init system.
+
+The bind-mount strategy is required for "openrc" or "sysv" init, but not for
+"systemd" or other setups like VoidLinux's "runit" system. For systems which
+don't already have /etc/inittab, the file should simply be a symbolic link 
+to /etc/bb.d/conf/inittab.
+
+But EITHER WAY, a file named /etc/inittab MUST exist on the system!
+

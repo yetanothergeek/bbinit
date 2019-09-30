@@ -1,0 +1,27 @@
+The /usr/share/bbinit/utils/ directory contains some non-essential files
+which might come in handy when working with bbinit. Some of them might
+also be useful outside the scope of this project.
+
+/usr/share/bbinit/utils/bbck:
+This script will test a build of busybox to see if it is suitable for use
+with bbinit.
+
+/usr/share/bbinit/utils/findmemdisk:
+This is a "busybox port" of the syslinux "memdiskfind" utility to search 
+for a MEMDISK instance and output the parameters needed to use the "phram"
+driver in Linux to map it. It might be useful, for example, if your
+initramfs needs to mount an ISO (cdrom or dvd) image that was booted with 
+syslinux's "memdisk" loader.
+
+/usr/share/bbinit/utils/pxesrv:
+An easy-to-use script to run a PXE server using only syslinux and busybox.
+(PXE is a technology for booting a computer from an operating system served
+over a network connection.)
+
+/usr/share/bbinit/utils/solister:
+A script to read an ELF executable file and output a list of shared library
+dependencies required to execute the file. It performs a similar function
+to programs such as "ldd" and "lddtree" but it is written in busybox shell
+and uses only busybox applets. You might use it if you want to add additional
+programs to an initramfs image.
+

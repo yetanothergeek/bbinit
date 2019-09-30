@@ -1,0 +1,138 @@
+Maybe the best way to describe what bbinit does is to examine its files:
+
+/usr/share/bbinit/mkramfs:
+This is a script to generate a suitable initramfs file for booting bbinit.
+It takes only two (optional) command line arguments, but there quite a few 
+environment variables which control its behavior. Consult the file 
+./mkramfs.txt for more info.
+
+/usr/share/bbinit/init:
+This script is copied into the initramfs by mkramfs and is responsible
+for early setup of the ramfs, loading kernel modules, mounting fundamental
+system directories, and eventually switching control over to the "real" 
+system installed on the hard drive.
+
+/usr/share/bbinit/kvck:
+In order for the system to boot properly, the ramfs file MUST match the 
+kernel version loaded by your bootloader. Running the kvck script 
+(Kernel Version ChecK) can usually detect a mismatch and optionally update
+the ramfs if needed. For Arch Linux and Void Linux systems, see the description
+of the ./dist/* scripts below to perform this operation automatically
+whenever the kernel is updated by the package manager. If you know how to
+integrate this type of "hook" into other package managers I would like to
+hear from you. Otherwise you can run this command either post-upgrade or
+just before a reboot:
+  /usr/share/bbinit/kvck -u /boot/vmlinuz /boot/ramfs
+(Being sure to adjust the kernel and ramfs names to match your setup)
+
+/usr/share/bbinit/generic:
+This is a wrapper script around mkramfs to create a more "generic"
+initramfs, that is, one that is compatible with a wider variety
+of hardware.
+
+/usr/share/bbinit/utils/:
+The  directory contains some non-essential files which might come in
+handy when working with bbinit. Consult the file ./utils.txt
+for a detailed listing of these utilities. 
+
+/etc/inittab => /etc/bb.d/conf/inittab:
+This file controls some aspects of the startup and shutdown of the 
+system. See ./inittab.txt for more info.
+
+/etc/mdev.conf => /etc/bb.d/conf/mdev.conf:
+This file controls how busybox's mdev applet handles the files and permissions
+for devices in the /dev directory. If your system already has a working
+/etc/mdev.conf you should probably continue using it. But if you don't have a
+file named /etc/mdev.conf you should create a symbolic link to
+/etc/bb.d/conf/mdev.conf .
+
+/etc/bb.d/task/:
+This directory contains the scripts needed to bring up the system at boot time,
+and to bring the system down cleanly for a shutdown or reboot. The scripts are
+sourced by the /etc/bb.d/rcS in natural sort order at startup, and in reverse 
+order by /etc/bb.d/rcO on shutdown. Each script may contain a function called 
+task_start() that is run at startup, and a function called task_stop() that
+is run at shutdown. The default scripts are numbered by 10's so it is possible
+to add your own scripts in between if you need to do anything special at a
+certain point during startup or shutdown. For instance:
+
+/etc/bb.d/task/010-do-something      # <= Some default system script.
+/etc/bb.d/task/015-my-script         # <= Custom script added by user.
+/etc/bb.d/task/020-something-else    # <= Another default system script.
+
+
+/etc/bb.d/rcS:
+This script runs at startup and is responsible for a number of system
+initialization tasks including: checking and mounting the devices and 
+filesystems described by /etc/fstab; setting up the hostname described
+by /etc/hostname; seeding the system's random number generator; setting
+up the loopback (127.0.0.1) device; and launching busybox's system event
+handlers (mdev and uevent) For the most part it simply reads the scripts
+in /etc/bb.d/task/ and runs their task_start() function.
+
+/etc/bb.d/rcO:
+This script runs at shutdown and is responsible for cleanly terminating
+processes, shutting down network interfaces, and umounting filesystems.
+Some of this work is accomplished by reading the /etc/bb.d/task/ scripts
+and running their task_stop() functions.
+
+/etc/bb.d/rc.local:
+Here lives anything else you want to run at startup or shutdown. This
+script is launched with the "start" argument immediately AFTER 
+/etc/bb.d/rcS completes, and once again with the "stop" argument just
+BEFORE /etc/bb.d/rc0 runs its default operations. You should customize
+this file by adding/removing commands to the appropriate start/stop 
+section to suit the specific needs of your system.
+
+./dist/arch/bbinit:
+This script is specific to Arch Linux based systems for booting a kernel
+installed by pacman. See the comments at the beginning of the script for
+instructions on how to enable it.
+
+./dist/void/99-bbinit:
+This script is specific to Void Linux based systems for booting a kernel
+installed by xbps. See the comments at the beginning of the script for
+instructions on how to enable it.
+
+/bin/busybox:
+This is the "Swiss Army Knife" executable performs many of the functions
+used by bbinit. See the file ./busybox.txt for information on the
+requirements of this important, user-supplied piece of the system.
+
+/etc/bb.d/init:
+This script executes the single command: "exec /bin/busybox init".
+It should be passed to the kernel command line in your bootloader as
+"init=/etc/bb.d/init" to ensure that the busybox version of init
+is launched, in case your system has an incompatible version of
+/sbin/init.
+
+/etc/bb.d/exec/:
+This directory contains additional scripts that may be used by bbinit
+or other scripts to launch the corrsponding busybox applets. At the time
+of this writing it mostly contains wrappers around busybox's ifup, ifdown
+and related commands. It also contains the autologin script described below.
+
+/etc/bb.d/exec/autologin:
+This script provides an option to automatically log in a specific user,
+depending on the setting in the autologin.conf file, described below.
+
+/etc/bb.d/conf/autologin.conf:
+This file controls how the autologin feature behaves. If you set AUTOLOGIN=
+to a valid username, that user will automatically be logged in on tty1 at
+startup. If set to a single question mark [AUTOLOGIN=?] the value will be
+determined from the kernel boot parameter "autologin=" (Both of these options
+have some obvious security concerns, so use them with caution.)
+If AUTOLOGIN= is empty, tty1 will behave as a normal login console.
+
+/etc/bb.d/mdev/:
+This directory is intended for scripts which are referenced by the bbinit 
+version of /etc/mdev.conf. At the time of this writing, it contains a script
+named "ifgrp" which supresses mdev error messages about missing group names,
+and a slightly modified copy of Piotr Karbowski's "storage-device" script from
+the mdev-like-a-boss project (renamed "map-dev-by") which populates the
+/dev/disk/by-uuid, /dev/disk/by-label, and /dev/mapper/ directories.
+
+/usr/share/lsramfs:
+This is simply a convenience script to list the contents of an existing
+ramfs file.
+

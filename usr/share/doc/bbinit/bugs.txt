@@ -1,0 +1,12 @@
+BUGS/LIMITATIONS:
+Probably there are many. There is currently no support for advanced filesystem 
+handling such as LVM or encrypted root filesystems. 
+
+One particularly annoying problem is that when you (or your package manager)
+update busybox, the system is not able to cleanly unmount the root filesystem
+on the next reboot. This is because the old busybox is still in use (because it
+is the PID #1 init) hence the filesystem stays "busy" as long as "init" is 
+running. This is generally harmless, but /etc/bb.d/rc0 will spend a lot of time
+trying to unmount the drive before finally giving up and rebooting while the
+device is still mounted, triggering an automatic fsck on the next boot.
+

@@ -1,0 +1,77 @@
+AUTOMATED INSTALLATION: 
+
+The simplest way to install bbinit on a running system
+is to run the command:
+
+  ./install/install.sh -y
+
+In order to access the root filesystem, this command must be run as root,
+but you can test the result of the command as a normal user:
+
+  mkdir /tmp/bbinit-test
+  ./install/install.sh -y /tmp/bbinit-test/
+
+IMPORTANT: In order to boot from the installed files, your bootloader must
+also be configured to use bbinit's /boot/ramfs file as the initrd, and 
+/etc/bb.d/init as the init program. If you don't know how to configure your
+bootloader, this project is probably not for you.
+
+Because bbinit does not automatically mount the /tmp , /run and /dev/shm 
+directories, your /etc/fstab file might also need to be edited. If you
+don't know how to edit your /etc/fstab file, this project is probably not
+for you.
+
+Pay careful attention to the output of the installer for more information
+on these steps.
+
+NOTE: The install script should also work to update an existing installation
+to a newer version. It will try to detect any user-modifed files and,
+depending on the nature of the change, will either install the new file as
+*.new or rename the existing file as and *.old file. After the update has 
+completed you should check for these files and compare them to see if any
+of your locally modified have been affected.
+
+
+MANUAL INSTALLATION:
+
+If you would prefer to install bbinit manually, to better understand the 
+way bbinit works, you can do things the old-fashioned way by following
+the steps below:
+
+1. Copy the contents of bbinit/etc to /etc/
+
+2. If you don't already have a file named /etc/inittab, create a symbolic 
+   link from /etc/bb.d/conf/inittab to /etc/inittab like this:
+     ln -s bb.d/conf/inittab /etc/
+   (If you already have a /etc/inittab file, leave it alone - your current
+    init system probably needs it!)
+
+3. If you don't already have a file named /etc/mdev.conf, create a symbolic 
+   link from /etc/bb.d/conf/mdev.conf to /etc/mdev.conf like this:
+     ln -s bb.d/conf/mdev.conf /etc/
+   (If you already have a /etc/mdev.conf file, leave it alone - your current
+    system probably needs it!)
+
+4. Make sure you have a statically linked, fully functional /bin/busybox
+   or /bin/busybox.static installed on your system. If you run the command:
+   'ldd /bin/busybox' on a GNU/Linux system, it should report:
+   "Not a dynamic executable" <= (This is what you want)
+   If your distro doesn't provide a usable busybox package, you should
+   be able to download one from: https://busybox.net/downloads/binaries/
+   Look under the latest /*-defconfig-multiarch/ subdirectory for one that
+   matches your machine's architecture.
+
+5. Copy the contents of bbinit/usr/share/bbinit/ to /usr/share/bbinit/
+
+6. Run the command: /usr/share/bbinit/mkramfs
+
+7. Edit your bootloader config and add an entry specifying /boot/ramfs
+   as the initrd and init=/etc/bb.d/init
+
+8. Cross your fingers, say a prayer, or whatever makes you feel invincible,
+   and reboot, choosing your new bootloader option when prompted.
+
+9. If something went wrong, should still be able to boot using your previous
+   bootloader option. If not, you might need to boot from external media to
+   fix things.
+

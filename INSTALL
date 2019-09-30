@@ -27,7 +27,7 @@ on these steps.
 NOTE: The install script should also work to update an existing installation
 to a newer version. It will try to detect any user-modifed files and,
 depending on the nature of the change, will either install the new file as
-*.new or rename the existing file as and *.old file. After the update has 
+*.new or rename the existing file as *.old file. After the update has 
 completed you should check for these files and compare them to see if any
 of your locally modified have been affected.
 

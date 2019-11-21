@@ -42,11 +42,12 @@ for Arg in "$@" ; do
   esac
 done
 
+case $($BB hexdump -n 2 -e '1 2 "%x"' "$RAMFS") in
+  5a42) UZ='bzip2 -dc' ;;
+  8b1f) UZ='gzip -dc' ;;
+  37fd) UZ='xz -dc' ;;
+esac
 
-UZ=cat
-for Z in gzip bzip2 xz ; do
-  $BB $Z -dc $RAMFS &> /dev/null && UZ="$Z -dc" && break
-done
 
 if [ "$VERBOSE" -eq 0 ] ; then
   $BB $UZ "$RAMFS" | $BB cpio -tv 2> /dev/null | $BB awk '{if (/^d.*/) {print $6 "/"} else {print $6} }' | sort

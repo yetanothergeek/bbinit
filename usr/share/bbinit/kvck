@@ -98,9 +98,11 @@ esac
 if [ -e "$RAMFS" ] ; then
   readable "$RAMFS"
   UZ=cat
-  for Z in gzip bzip2 xz ; do
-    $BB $Z -dc $RAMFS &> /dev/null && UZ="$Z -dc"
-  done
+  case $($BB hexdump -n 2 -e '1 2 "%x"' "$RAMFS") in
+    5a42) UZ='bzip2 -dc' ;;
+    8b1f) UZ='gzip -dc' ;;
+    37fd) UZ='xz -dc' ;;
+  esac
   for F in $($BB $UZ $RAMFS | $BB cpio -H newc -ti '*' 2> /dev/null) ; do
     [ "$F" = "lib/modules/$KVER" ]     && say OK && exit 0
     [ "$F" = "usr/lib/modules/$KVER" ] && say OK && exit 0

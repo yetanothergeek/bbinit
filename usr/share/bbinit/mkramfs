@@ -5,6 +5,111 @@ DEBUG () { echo -en "$@" 1>&2; }
 
 WARN () { printf "*** Warning: %s\n" "$@" 1>&2; }
 
+
+have_cpu_flag () {
+  [ -f /proc/cpuinfo ] && [ -r /proc/cpuinfo ] || return 1
+  local Line
+  while read Line ; do
+    case "$Line" in 
+      flags*:*)
+        local Flag
+        for Flag in $Line ; do
+          [ "$Flag" = "$1" ]  && return 0
+        done
+      ;;
+    esac
+  done < /proc/cpuinfo
+  return 1
+}
+
+
+have_module () {
+  local N=$($BB find "$MODULES_SRC_DIR" -type f -name "$1" | $BB wc -l)
+  [ "$N" -eq 0 ] && return 1 || return 0
+}
+
+get_softdeps () {
+
+  local AllModules=""
+
+  order_module () {
+    local M="$1"
+    case "$M" in
+      crc32c) # If CPU supports SSE 4.2 we can use hardware accel for CRC-32
+        if have_cpu_flag 'sse4_2' && have_module 'crc32c[-_]intel.ko*' ; then
+          M='crc32c_intel'
+        else
+          if have_module 'crc32c[-_]generic.ko*' ; then
+            M='crc32c_generic'
+          fi
+        fi
+      ;;
+    esac
+    local E
+    for E in $AllModules ; do [ "$E" = "$M" ] && return; done
+    AllModules="$AllModules $M"
+  }
+  local modules_softdep="$MODULES_SRC_DIR/modules.softdep"
+  local etc_modules="$1"
+  [ -f "$modules_softdep" ] || return
+  [ -f "$etc_modules" ] || return 
+  local eMod eOpts
+  while read eMod eOpts ; do
+    eMod=${eMod//-/_}
+    local kWord kMod kOpts
+    while read kWord kMod kOpts ; do
+      [ "$kWord" = 'softdep' ] || continue
+      kMod=${kMod//-/_}
+      if [ "$eMod" = "$kMod" ] ; then
+        local PreMods=""
+        local PostMods=""
+        local Mode='pre'
+        local kOpt
+        for kOpt in $kOpts ; do
+          case "$kOpt" in
+            pre:) Mode='pre' ;;
+            post:) Mode='post' ;;
+            *) 
+              case "$Mode" in
+                pre) PreMods="$PreMods $kOpt" ;;
+                post) PostMods="$PostMods $kOpt" ;;
+              esac
+            ;;
+          esac
+        done
+        for M in $PreMods ; do order_module "$M" ; done
+        order_module "$eMod"
+        for M in $PreMods ; do order_module "$M" ; done
+      fi
+    done < "$modules_softdep"
+    order_module "$eMod"
+  done < "$etc_modules"
+  echo $AllModules | tr \  \\n > "$2"
+}
+
+
+resolve_softdeps () {
+  local etc_modules="$1"
+  local etc_modules_tmp="$etc_modules.tmp"
+  rm -f "$etc_modules_tmp"
+  touch "$etc_modules_tmp"
+  local Try=0
+  while [ "$Try" -lt 32 ] ; do
+    get_softdeps "$etc_modules" "$etc_modules.tmp"
+    if diff -q "$etc_modules" "$etc_modules.tmp" > /dev/null ; then
+      rm -f "$etc_modules_tmp"
+      return 0
+    else
+      mv "$etc_modules.tmp" "$etc_modules"
+      touch "$etc_modules"
+    fi
+    Try=$((Try+1))
+  done
+  echo "Warning: unknown error resolving soft module dependencies"
+  return 1
+}
+
+
 resolve_alias () {
   case "$@" in
     pci:*) lookup_pci "$@" ;;
@@ -15,7 +120,8 @@ resolve_alias () {
 
 
 get_deps () {
-  $BB grep "$@" $MODULES_SRC_DIR/modules.dep | $BB sed -e 's/://' -e 's/ /\n/g'
+  local Pattern="/${1//[-_]/[-_]}\.ko\(\.[gx]z\)*:"
+  $BB grep "$Pattern" $MODULES_SRC_DIR/modules.dep | $BB sed -e 's/://' -e 's/ /\n/g'
 }
 
 
@@ -83,7 +189,7 @@ list_modules () {
     while read Alias; do
       resolve_alias "$Alias"
     done | $BB sort -u | while read Module; do
-      get_deps "/${Module//[-_]/[-_]}\.ko\(\.[gx]z\)*:"
+      get_deps "$Module"
     done > $modlist
     DEBUG "    done.\n"
   else
@@ -94,7 +200,7 @@ list_modules () {
   DEBUG "Adding user-specified modules... "
   # Resolve filenames and dependencies for any user-specified modules
   for Module in $BBI_EXTRA_MODULES; do
-    get_deps "/${Module//[-_]/[-_]}\.ko\(\.[gx]z\)*:"
+    get_deps "$Module"
   done >> $modlist
   DEBUG "    done.\n"
   # Send the results to stdout, the caller will deal with it from there
@@ -126,6 +232,37 @@ get_host_busybox () {
     WARN "$0 Cannot find prefered busybox executable, falling back to /bin/busybox"
     BBI_HOST_BUSYBOX='/bin/busybox'
     BB="$BBI_HOST_BUSYBOX"
+  fi
+}
+
+
+fix_module_compression () {
+  if [ "$BBI_GZIP_MODULES" = '1' ] ; then
+    $BB find $MODULES_TRG_DIR/kernel/ -name '*.ko' | $BB sort | \
+    while read KO ; do
+      $BB gzip $KO
+    done
+  else
+    $BB find $MODULES_TRG_DIR/kernel/ -type f -name '*.ko.*' | $BB sort | \
+    while read M ; do
+      case $M in
+        *.ko.gz)  $BB gzip  -d $M ;;
+        *.ko.xz)  $BB xz    -d $M ;;
+        *.ko.bz2) $BB bzip2 -d $M ;;
+        *) WARN "Unsupported file extension:\n $M"
+      esac
+    done
+  fi
+}
+
+copy_module () {
+  local SRC="$1"
+  exclude_module_dir $SRC && return
+  [ -e ./lib/modules/$SRC ] && return
+  if [ -e "$BBI_MODULES_PATH/$SRC" ] ; then
+    $BB install -m 644 -D $BBI_MODULES_PATH/$SRC ./lib/modules/$SRC
+  else
+    $BB basename "$SRC" >> missing
   fi
 }
 
@@ -176,39 +313,28 @@ main () {
   $BB chmod 755 bin/busybox
   $BB cp $BBI_RAMFS_INIT ./init
   $BB chmod 755 ./init
-  for SRC in $(list_modules) ; do
-    exclude_module_dir $SRC && continue
-    if [ -e "$BBI_MODULES_PATH/$SRC" ] ; then
-      TRG=./lib/modules/$($BB dirname $SRC)
-      $BB mkdir -p $TRG
-      $BB cp $BBI_MODULES_PATH/$SRC $TRG
-    else
-      $BB basename "$SRC" .gz >> missing
-    fi
-  done
-
+  for SRC in $(list_modules) ; do copy_module "$SRC" ; done
+  if [ "$BBI_IGNORE_HOST" != '1' ] ; then
+    $BB find "$MODULES_TRG_DIR/kernel/" -name '*.ko*'  | $BB sort | \
+    while read KO ; do
+      KO=${KO##*/}
+      echo ${KO%.ko*}
+    done > etc/modules
+    DEBUG "Resolving soft dependencies...     "
+    resolve_softdeps etc/modules
+    while read Module ; do
+      get_deps "$Module"
+    done < etc/modules | $BB sed 's#^#'"$KVER/"'#' | while read SRC ; do
+      copy_module "$SRC"
+    done
+    DEBUG "done.\n"
+  fi
+  fix_module_compression
   if [ -e missing ] ; then
     for M in $($BB sort -u missing) ; do 
       WARN "missing module '$M'"
     done
     $BB rm -f missing
-  fi
-
-  if [ "$BBI_GZIP_MODULES" = '1' ] ; then
-    $BB find $MODULES_TRG_DIR/kernel/ -name '*.ko' | $BB sort | \
-    while read KO ; do
-      $BB gzip $KO
-    done
-  else
-    $BB find $MODULES_TRG_DIR/kernel/ -type f -name '*.ko.*' | $BB sort | \
-    while read M ; do
-      case $M in
-        *.ko.gz)  $BB gzip  -d $M ;;
-        *.ko.xz)  $BB xz    -d $M ;;
-        *.ko.bz2) $BB bzip2 -d $M ;;
-        *) WARN "Unsupported file extension:\n $M"
-      esac
-    done
   fi
 
   for EXT in builtin alias dep; do
@@ -237,12 +363,6 @@ main () {
   else
     WARN "BBI_EXTRA_FILES_ROOT path not found: $BBI_EXTRA_FILES_ROOT"
   fi
-
-  [ "$BBI_IGNORE_HOST" = '1' ] || \
-  $BB find "$MODULES_TRG_DIR/kernel/" -name '*.ko'  | $BB sort | \
-  while read KO ; do
-    echo $($BB basename $KO .ko) 
-  done > etc/modules
 
   [ -e etc/mdev.conf ] || \
   echo '$MODALIAS=.* 0:0 660 @modprobe "$MODALIAS" 2> /dev/null' > etc/mdev.conf

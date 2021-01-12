@@ -1,0 +1,143 @@
+#!/bin/busybox sh
+
+# An attempt to populate /run/udev/data/ with the appropriate
+# input device information, for systems with Xorg/libinput but
+# without a running udev daemon. Partially working but does
+# not support dynamic input device connections, e.g. unplugging
+# and re-plugging the keyboard or mouse will cause it to stop
+# functioning.)
+
+pidof udevd > /dev/null && exit 0
+
+[ "$ACTION" = 'add' ] || exit 0
+[ "$SUBSYSTEM" = 'input' ] || exit 0
+
+mountpoint -q /run || exit 0
+
+EVENTN=${MDEV##*/}
+DEVPATH=$(readlink -f "/sys/class/input/$EVENTN")
+INPUTN=${DEVPATH%/*}
+INPUTN=${INPUTN##*/}
+CAPS=
+ID_BUS=
+ID_SERIAL=
+ID_VENDOR_ID=
+ID_MODEL_ID=
+
+GRP='input'
+grep -q "^$GRP:" /etc/group && chgrp "$GRP" "/dev/$MDEV"
+
+cd "$DEVPATH" || exit 1
+
+EV_SYN=0x00
+EV_KEY=0x01
+EV_REL=0x02
+EV_ABS=0x03
+EV_MSC=0x04
+EV_SW=0x05
+EV_LED=0x11
+EV_SND=0x12
+EV_REP=0x14
+EV_FF=0x15
+EV_PWR=0x16
+EV_FF_STATUS=0x17
+
+CAP=0x$(cat device/capabilities/ev)
+
+if [ $((CAP&2**EV_KEY)) -ne 0 ] && [ $((CAP&2**EV_REP)) -ne 0 ] ; then
+  CAPS='K'
+else
+  if [ $((CAP&2**EV_REL)) -ne 0 ] && [ $((CAP&2**EV_ABS)) -eq 0 ] ; then
+    CAPS='M'
+  else
+    if [ $((CAP&2**EV_KEY)) -ne 0 ] && [ $((CAP&2**EV_ABS)) -ne 0 ] ; then
+      CAPS='T'
+    else
+      :
+      exit
+    fi
+  fi
+fi
+
+INDEX=$$
+
+ID_SERIAL=$(cat device/name)
+ID_SERIAL=${ID_SERIAL// /_}
+BUSTYPE=$(cat device/id/bustype)
+
+case "$BUSTYPE" in
+  0001) ID_BUS='pci' ;;
+  0002) ID_BUS='isapnp' ;;
+  0003) ID_BUS='usb' ;;
+  0004) ID_BUS='hil' ;;
+  0005) ID_BUS='bluetooth' ;;
+  0006) ID_BUS='virtual' ;;
+  0010) ID_BUS='isa' ;;
+  0011) ID_BUS='i8042' ;;
+  0012) ID_BUS='xtkbd' ;;
+  0013) ID_BUS='rs232' ;;
+  0014) ID_BUS='gameport' ;;
+  0015) ID_BUS='parport' ;;
+  0016) ID_BUS='amiga' ;;
+  0017) ID_BUS='adb' ;;
+  0018) ID_BUS='i2c' ;;
+  0019) ID_BUS='host' ;;
+  001A) ID_BUS='gsc' ;;
+  001B) ID_BUS='atari' ;;
+  001C) ID_BUS='spi' ;;
+  001D) ID_BUS='rmi' ;;
+  001E) ID_BUS='cec' ;;
+  001F) ID_BUS='intel_ishtp' ;;
+     *) ID_BUS='unknown' ;;
+esac
+
+HWPATH=$DEVPATH
+while [ ${#HWPATH} -gt 5 ] ; do
+  if [ -f $HWPATH/idProduct ] && [ -f $HWPATH/idVendor ]; then
+    ID_MODEL_ID=$(cat $HWPATH/idProduct)
+    ID_VENDOR_ID=$(cat $HWPATH/idVendor)
+    break
+  fi
+  NEXT=${HWPATH%/*}
+  [ "${#NEXT}" -lt "${#HWPATH}" ] && HWPATH=$NEXT || break
+done
+
+print_caps () {
+  case "$CAPS" in
+    K) printf "%s\n%s\n%s\n" 'E:ID_INPUT=1' 'E:ID_INPUT_KEY=1' 'E:ID_INPUT_KEYBOARD=1' ;;
+    M) printf "%s\n%s\n" 'E:ID_INPUT=1' 'E:ID_INPUT_MOUSE=1' ;;
+    T) printf "%s\n%s\n" 'E:ID_INPUT=1' 'E:ID_INPUT_TOUCHPAD=1' ;;
+  esac
+}
+
+print_make_and_model () {
+  [ "$ID_VENDOR_ID" ] && echo "E:ID_VENDOR_ID=$ID_VENDOR_ID"
+  [ "$ID_MODEL_ID" ] && echo "E:ID_MODEL_ID=$ID_MODEL_ID"
+}
+
+
+OUTDIR='/run/udev/data'
+mkdir -m 755 -p "${OUTDIR%/*}"
+mkdir -m 755 -p "$OUTDIR"
+
+OUTFILE="$OUTDIR/+input:$INPUTN"
+
+cat << EOF > "$OUTFILE"
+E:ID_BUS=$ID_BUS
+E:ID_SERIAL=$ID_SERIAL
+$(print_make_and_model)
+$(print_caps)
+I:$(printf '%08d' ${INDEX}1)
+G:seat
+EOF
+
+OUTFILE=$OUTDIR/$(stat -c "0x%t 0x%T" "/dev/$MDEV" | awk '{printf("c%d:%d\n",$1,$2)}')
+
+cat << EOF > "$OUTFILE"
+E:ID_BUS=$ID_BUS
+E:ID_SERIAL=$ID_SERIAL
+$(print_make_and_model)
+$(print_caps)
+I:$(printf '%08d' ${INDEX}2)
+EOF
+

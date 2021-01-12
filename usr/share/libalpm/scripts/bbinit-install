@@ -1,0 +1,42 @@
+#!/bin/busybox sh
+set -e
+ExitCode=0
+while read -r line; do
+  case "$line" in 
+    */vmlinuz) 
+      kdir="/${line%/vmlinuz}"
+      kver=${kdir##*/}
+      case "$kver" in
+        [0-9]*) ;;
+        *) continue ;;
+      esac
+      pkgbase="$kdir/pkgbase"
+      [ -f "$pkgbase" ] && read -r kbase < "$pkgbase" || continue
+    ;;
+    *) continue ;;
+  esac
+  if diff -q "/${line}" "/boot/vmlinuz-${kbase}" &> /dev/null ; then
+    echo "==> Kernel /boot/vmlinuz-${kbase} is up to date."
+  else
+    echo "==> Installing kernel /boot/vmlinuz-${kbase}"
+    install -Dm644 "/${line}" "/boot/vmlinuz-${kbase}"
+  fi
+  ID=
+  if [ -f /etc/os-release ] ; then
+    while read key; do
+      case "$key" in
+        ID=*) eval "$key" && [ "$ID" ] && break || : ;;
+      esac
+    done < /etc/os-release
+  fi
+  [ "$ID" ] || ID=arch
+
+  ramfs="$ID-$kbase.bbi"
+  ramfs=${ramfs/-linux/}
+
+  /usr/share/bbinit/mkramfs "$kver" \
+    "/boot/$ramfs" 2>&1 | awk '{printf("==> %s\n",$0)}' 
+done
+
+
+

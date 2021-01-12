@@ -1,0 +1,25 @@
+#!/bin/busybox sh
+
+# Kernel post-remove hook for bbinit.
+
+PKGNAME="$1"
+VERSION="$2"
+
+kernel=$(readlink -f /boot/vmlinuz-$VERSION)
+ramfs=$(readlink -f /boot/void-$VERSION.bbi)
+
+for link in $(find /boot/ -type l ) ; do
+  deref=$(readlink -f "$link")
+  case "$link" in 
+    /boot/vmlinuz)
+      [ "$deref" =  "$kernel" ] || continue
+      [ -e "$kernel" ] || rm -f "$link"
+    ;;
+    /boot/void*.bbi)
+      [ "$deref" =  "$ramfs" ] && rm -f "$link"
+    ;;
+  esac
+done
+
+rm -f "$ramfs"
+

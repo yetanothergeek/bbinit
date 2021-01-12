@@ -1,0 +1,11 @@
+[Trigger]
+Type = File
+Operation = Install
+Operation = Upgrade
+Target = usr/lib/modules/*/vmlinuz
+
+[Action]
+Description = Updating bbinit initramfs...
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/bbinit-install
+NeedsTargets

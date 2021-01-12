@@ -1,0 +1,34 @@
+#!/bin/busybox sh
+set -e
+
+while read -r line; do
+  case "$line" in 
+    */vmlinuz) 
+      kdir="/${line%/vmlinuz}"
+      kver=${kdir##*/}
+      case "$kver" in
+        [0-9]*) ;;
+        *) continue ;;
+      esac
+      pkgbase="$kdir/pkgbase"
+      [ -f "$pkgbase" ] && read -r kbase < "$pkgbase" || continue
+    ;;
+    *) continue ;;
+  esac
+  ID=
+  if [ -f /etc/os-release ] ; then
+    while read key; do
+      case "$key" in
+        ID=*) eval "$key" && [ "$ID" ] && break || : ;;
+      esac
+    done < /etc/os-release
+  fi
+  [ "$ID" ] || continue
+  if false ; then rm -f "/boot/vmlinuz-${kbase}"; fi
+  ramfs="$ID-$kbase.bbi"
+  ramfs=${ramfs/-linux/}
+  rm -f "/boot/$ramfs" && exit 0
+done
+
+exit 1
+

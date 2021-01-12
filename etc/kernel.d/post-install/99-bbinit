@@ -1,0 +1,67 @@
+#!/bin/busybox sh
+
+# Kernel post-install hook for bbinit.
+
+PKGNAME="$1"
+VERSION="$2"
+
+[ -x /usr/share/bbinit/mkramfs ] ||	exit 0
+
+/usr/share/bbinit/mkramfs "$VERSION" "void-$VERSION.bbi"
+
+# To make bootloader configuration easier, we want to maintain
+# the non-versioned symlinks "vmlinuz" and "void.bbi" but
+# we want these to always point to the latest kernel version,
+# which might not be the one we are installing now. So we must
+# parse the version numbers from all kernels in /boot to determine
+# which one is the latest.
+
+cd /boot || exit 1
+
+Parse () {
+  V=${1/vmlinuz-/}
+  Bld=${V/*_/}
+  V=${V/_*/}
+  Maj=${V%%.*}
+  V=${V#*.}
+  Min=${V%%.*}
+  Mic=${V#*.}
+}
+
+
+MajHi=0
+for K in vmlinuz-[0-9]*.[0-9]*.[0-9]*_[0-9]* ; do
+  Parse "$K"
+  printf '%d' "$Maj" &> /dev/null || continue
+  [ "$Maj" -gt "$MajHi" ] && MajHi=$Maj
+done
+
+MinHi=0
+for K in vmlinuz-$MajHi.[0-9]*.[0-9]*_[0-9]* ; do
+  Parse "$K"
+  printf '%d' "$Min" &> /dev/null || continue
+  [ "$Min" -gt "$MinHi" ] && MinHi=$Min
+done
+
+MicHi=0
+for K in vmlinuz-$MajHi.$MinHi.[0-9]*_[0-9]* ; do
+  Parse "$K"
+  printf '%d' "$Mic" &> /dev/null || continue
+  [ "$Mic" -gt "$MicHi" ] && MicHi=$Mic
+done
+
+BldHi=0
+for K in vmlinuz-$MajHi.$MinHi.${MicHi}_[0-9]* ; do
+  Parse "$K"
+  printf '%d' "$Bld" &> /dev/null || continue
+  [ "$Bld" -gt "$BldHi" ] && BldHi=$Bld
+done
+
+LATEST=$MajHi.$MinHi.${MicHi}_$BldHi
+
+if [ "$LATEST" = "$VERSION" ] ; then
+  echo 'Updating symlinks...'
+  ln -sfv vmlinuz-${VERSION}  /boot/vmlinuz
+  ln -sfv "void-$VERSION.bbi" /boot/void.bbi
+fi
+

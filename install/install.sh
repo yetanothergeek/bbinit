@@ -140,6 +140,14 @@ for SrcFile in $($BB find usr/ etc/ -type f | $BB sort) ; do
       done < "$ToBeReplaced"
     fi
   fi
+  # Only install distro-specific files if their target directory already exists.
+  case "$SrcFile" in 
+    *usr/share/libalpm/*|*etc/kernel.d/*) 
+      TrgDir=$(dirname "$SrcFile")
+      [ -d  "$RootDir/$TrgDir" ] || continue
+    ;;
+    
+  esac
   Install "$SrcFile" "$TrgFile"
 done
 

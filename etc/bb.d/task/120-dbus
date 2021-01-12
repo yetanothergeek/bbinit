@@ -17,7 +17,7 @@ if type -p dbus-daemon &> /dev/null ; then
   fi
   local DBusDaemon=$(type -p dbus-daemon)
   # Causes problems if daemon links to libsystemd and systemd isn't running.
-  if ! $BB grep -q libsystemd "$DBusDaemon"; then
+  if ! $BB grep -Eq 'libsystemd|libelogind' "$DBusDaemon"; then
     echo 'Starting dbus daemon...'
     $BB mkdir -p /run/dbus
     dbus-daemon --system

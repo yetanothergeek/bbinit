@@ -42,8 +42,8 @@ printf "%d" $loglevel &> /dev/null || loglevel=2
 $BB dmesg -n $loglevel
 
 [ "x$modprobe_delay" != 'x' ] && \
- printf "%d" "$modprobe_delay" &> /dev/null && \
-  [ "$modprobe_delay" -ge 0 ] || unset modprobe_delay
+ $BB sleep "$modprobe_delay" &> /dev/null || \
+  unset modprobe_delay
 
 [ $loglevel -eq 1 ] && printf "\r ${greeting//?/ } \r" || echo
 
@@ -73,11 +73,19 @@ if type -p mdev &> /dev/null ; then
 fi
 
 do_modprobe () {
+  local ARG=
+  local OPTS=
+  for ARG in $($BB cat /proc/cmdline); do
+    case "$ARG" in
+      *.*) [ "${ARG%%.*}" = "$1" ] && OPTS="$OPTS ${ARG#*.}" ;;
+    esac
+  done
+  OPTS="$1 $OPTS"
   if [ "x$modprobe_delay" != 'x' ] ; then
-    echo modprobe $1
-    [ $modprobe_delay -gt 0 ] && sleep $modprobe_delay
+    echo modprobe $OPTS
+    [ "$modprobe_delay" = '0' ] || $BB sleep $modprobe_delay
   fi
-  $BB modprobe $1
+  $BB modprobe $OPTS
 }
 
 if [ "x$modules" != 'x' ]; then
@@ -86,11 +94,22 @@ if [ "x$modules" != 'x' ]; then
   done
 fi
 
+modalias_count () { $BB find /sys/ -type f -name modalias | $BB wc -l ; }
+
 if [ -e /etc/autoscan ] ; then
-  INFO "Scanning for hardware"
-  $BB find /sys -type f -name modalias -exec $BB cat {} + | $BB sort -u | while read M ; do
-    do_modprobe $M 2> /dev/null
+  printf "Scanning for hardware "
+  LOOPS=0
+  while [ $LOOPS -lt 100 ] ; do
+    printf '.'
+    pre=$(modalias_count)
+    $BB find /sys/ -type f -name modalias -exec $BB cat {} + | $BB sort -u | while read M ; do
+      do_modprobe $M 2> /dev/null
+    done
+    $BB sleep 0.1
+    [ "$pre" -eq $(modalias_count) ] && break
+    LOOPS=$((LOOPS+1))
   done
+  echo
   INFO "Loading filesystem modules"
   for M in $($BB find "$MODULES_DIR/kernel/fs" -type f -name '*.ko*') ; do
     for A in $($BB modinfo -F alias $M) ; do

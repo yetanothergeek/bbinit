@@ -1,0 +1,28 @@
+#!/bin/busybox sh
+
+# Try to load a module, by name or by alias.
+
+modprobe -b "$1" 2> /dev/null && exit 0   # It worked? We're done!
+
+ResolveAlias () {
+  local DB Type Key Pattern Name 
+  DB="/lib/modules/$(uname -r)/modules.alias"
+  [ -f "$DB" ] || return
+  Type=${1:0:3} # Faster to filter first 3 chars as literal
+  grep -F "alias $Type" "$DB" | while read Key Pattern Name ; do
+    case "$1" in
+      $Pattern) echo "$Name" ;;
+    esac
+  done | sort -u
+}
+
+Error=1
+for M in $(ResolveAlias "$1") ; do
+  logger -s -t bbinit daemon.info "Loading module '$M'"
+  modprobe -b "$M" 2> /dev/null && Error=0
+done
+[ $Error -eq 0 ] && exit 0  # Claim success if at least one loaded
+
+logger -s -t bbinit daemon.warn "Failed to load module '$1'"
+exit 1
+

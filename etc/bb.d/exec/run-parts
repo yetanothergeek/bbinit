@@ -1,4 +1,4 @@
-#!/bin/busybox sh
+#!/lib/bb/sh
 # -*- mode: sh; -*-
 
 for ARG in "$@" ; do

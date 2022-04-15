@@ -1,4 +1,4 @@
-#!/bin/busybox sh
+#!/lib/bb/sh
 # Check to see if /tmp /run and /dev/shm are mentioned in /etc/fstab.
 # If not, explain to the user that they probably should be.
 

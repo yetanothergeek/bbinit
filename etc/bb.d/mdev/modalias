@@ -1,4 +1,4 @@
-#!/bin/busybox sh
+#!/lib/bb/sh
 
 # Try to load a module, by name or by alias.
 

@@ -1,4 +1,4 @@
-#!/bin/busybox sh
+#!/lib/bb/sh
 # -*- mode: sh; -*-
 
 # Script to find shared library dependencies in an ELF binary file.

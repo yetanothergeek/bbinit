@@ -1,4 +1,4 @@
-#!/bin/busybox sh
+#!/lib/bb/sh
 # -*- mode: sh; -*-
 
 # Creates a more "generic" initramfs that should be more portable 

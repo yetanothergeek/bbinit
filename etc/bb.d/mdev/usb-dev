@@ -1,4 +1,4 @@
-#!/bin/busybox sh
+#!/lib/bb/sh
 
 # If you want to run a script when a specific USB device is inserted or
 # removed, you can create the script in /etc/bb.b/usb/ and name it 

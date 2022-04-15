@@ -1,4 +1,4 @@
-#!/bin/busybox sh
+#!/lib/bb/sh
 # -*- mode: sh; -*-
 
 # Change device's group ownership to $1, then execute remaining args.

@@ -1,4 +1,4 @@
-#!/bin/busybox sh
+#!/lib/bb/sh
 # -*- mode: sh; -*-
 
 export PATH=/sbin:/usr/sbin:/bin:/usr/bin

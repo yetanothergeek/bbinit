@@ -13,18 +13,18 @@ ListNeededApplets () {
   local ExcludeScripts='pxesrv'
   ScriptPaths=$(for P in $ScriptPaths ; do echo "$BBCK_SCRIPTS_ROOT$P"; done)
   ExcludeScripts=$(for S in $ExcludeScripts; do echo "\! -name $S"; done)
-  for F in $($BB find $ScriptPaths -type f \! -name 'pxesrv' ) ; do
-    case $($BB stat $F -c %A) in
+  for F in $(find $ScriptPaths -type f \! -name 'pxesrv' ) ; do
+    case $(stat $F -c %A) in
       *x*) ;;
       *) continue ;;
     esac
-    $BB cat $F > /dev/null || continue
+    cat $F > /dev/null || continue
     Scripts="$Scripts $F"
   done
-  $BB awk '/\$BB / {
+  awk '/\$BB / {
     gsub(/\$BB /,"\n\$BB ");
     print;
-  }' $Scripts | $BB awk '/^\$BB / {
+  }' $Scripts | awk '/^\$BB / {
                   sub(/^\$BB +/,"");
                   if (/^[a-z]/) {
                     gsub(/[^a-z]+$/,"");
@@ -32,7 +32,7 @@ ListNeededApplets () {
                   }
                 } END {
                         printf("%s\n","uevent");
-                      }' | $BB sort -u
+                      }' | sort -u
 }
 
 die () { echo "${0##*/}: ERROR: $@" 1>&2; exit 1; }
@@ -54,7 +54,7 @@ esac
 
 echo "Testing $TestBB"
 
-DepLister="$($BB dirname $($BB readlink -f $0))/solister"
+DepLister="$(dirname $(readlink -f $0))/solister"
 if [ -f "$DepLister" ] && [ -x "$DepLister" ] ; then
   Dependencies=$($DepLister -q $TestBB)
   Dynamic=0

@@ -19,7 +19,7 @@ while read Dev MtPt Typ Opts Dump Pass ; do
   case "$Dev" in
    \#*) continue
   esac
-  MtPt=$(echo "$MtPt" | $BB sed -e 's#/\+#/#g' -e 's#/$##') # No // or final /
+  MtPt=$(echo "$MtPt" | sed -e 's#/\+#/#g' -e 's#/$##') # No // or final /
   case "$MtPt" in
     /tmp)      HaveTmpInFsTab=1 ;;
     /run)      HaveRunInFsTab=1 ;;

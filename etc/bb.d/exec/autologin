@@ -1,16 +1,14 @@
 #!/lib/bb/sh
 # -*- mode: sh; -*-
 
-BB='/bin/busybox'
-
 [ -f /etc/bb.d/conf/autologin.conf ] && . /etc/bb.d/conf/autologin.conf
 
 # If no username is specified, fallback to normal login prompt
-[ "x$AUTOLOGIN" = 'x' ] && exec $BB getty 0 tty1
+[ "x$AUTOLOGIN" = 'x' ] && exec getty 0 tty1
 
 # If username is '?' try to find "autologin=" on kernel command line
 if [ "$AUTOLOGIN" = '?' ] && [ -r '/proc/cmdline' ]; then
-  for A in $($BB cat '/proc/cmdline') ; do
+  for A in $(cat '/proc/cmdline') ; do
      case "$A" in
        autologin=*) 
          AUTOLOGIN=${A#*=}
@@ -23,12 +21,12 @@ fi
 # If numeric value, consider it as a UID
 if printf '%d' "$AUTOLOGIN"  &> /dev/null ; then
   AUTOLOGIN=$(
-    $BB awk -F : '{if ( $3 == "'$AUTOLOGIN'") {print $1}}' /etc/passwd
+    awk -F : '{if ( $3 == "'$AUTOLOGIN'") {print $1}}' /etc/passwd
   )
 fi
 
 # If username is invalid, fallback to normal login prompt
-$BB id -u "$AUTOLOGIN" &> /dev/null || exec $BB getty 0 tty1
+id -u "$AUTOLOGIN" &> /dev/null || exec getty 0 tty1
 
-exec $BB login -f "$AUTOLOGIN"
+exec login -f "$AUTOLOGIN"
 

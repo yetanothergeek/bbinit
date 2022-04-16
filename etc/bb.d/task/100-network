@@ -4,9 +4,9 @@
 # network
 task_start () {
 echo 'Configuring network interfaces...'
-[ -f /etc/hostname ] && $BB hostname -F /etc/hostname
-$BB ifconfig lo 127.0.0.1 up netmask 255.0.0.0
-[ -f /etc/mactab ] && $BB nameif -c /etc/mactab
+[ -f /etc/hostname ] && hostname -F /etc/hostname
+ifconfig lo 127.0.0.1 up netmask 255.0.0.0
+[ -f /etc/mactab ] && nameif -c /etc/mactab
 [ -f /etc/network/interfaces ] && /etc/bb.d/exec/ifup -a &
 }
 

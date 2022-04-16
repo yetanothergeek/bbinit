@@ -5,23 +5,22 @@
 # Shutdown any active TCP/UDP servers before bringing down
 # network interfaces, else some remote clients might hang.
 stop_servers () {
-  local BB='/bin/busybox'
   local srv_pids=$(
-   $BB netstat -ntulp 2> /dev/null | $BB awk \
+   netstat -ntulp 2> /dev/null | awk \
       '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+.*/ {
         gsub(/\/.*$/,"");
         print $7
-      }' | $BB sort -n
+      }' | sort -n
   )
   local all_pids=$(
     cd /proc
-    $BB find . -maxdepth 1 -type d -name '[0-9]*' | $BB cut -c 3-
+    find . -maxdepth 1 -type d -name '[0-9]*' | cut -c 3-
   )
   local kid_pids=$(
   for P in $all_pids
   do
     [ -e /proc/$P/status ] || continue
-    PP=$($BB awk '/^PPid:/ {print $2}' /proc/$P/status )
+    PP=$(awk '/^PPid:/ {print $2}' /proc/$P/status )
     for NP in $srv_pids
     do
       [ $PP = $NP ] && echo $P
@@ -30,8 +29,8 @@ stop_servers () {
   )
   [ -z "$kid_pids" ] && [ -z "$srv_pids" ] && return
   echo "Sending active TCP/UDP servers the $1 signal."
-  $BB kill -$1 $kid_pids $srv_pids
-  $BB sleep 1
+  kill -$1 $kid_pids $srv_pids
+  sleep 1
 }
 
 
@@ -42,8 +41,8 @@ get_pid_list () {
   local P
   for P in [0-9]*; do
     [ -d "$P" ] || continue
-    $BB awk '{sub(/.*) /,""); printf("%s.%.08d\n",$20,'$P')}' $P/stat
-  done | $BB sort -gr | $BB awk '{sub(/[0-9]+\.[0]+/,""); print}'
+    awk '{sub(/.*) /,""); printf("%s.%.08d\n",$20,'$P')}' $P/stat
+  done | sort -gr | awk '{sub(/[0-9]+\.[0]+/,""); print}'
   cd /
 }
 
@@ -63,33 +62,31 @@ stop_tasks () {
 
 rcz_main () {
 
-local BB='/bin/busybox'
-
 cd /
-$BB chvt 1
+chvt 1
 echo 'The system is going down for the count, NOW!' >&2
-$BB sleep 2
+sleep 2
 
 stop_tasks
 
-$BB mount -t nfs | while read Dev on MtPt Etc ; do
+mount -t nfs | while read Dev on MtPt Etc ; do
   NfsSrv="${Dev%:*}"
-  if $BB ping -q -c 1 -W 3 ${Dev%:*} > /dev/null ; then
-    $BB umount "$MtPt" || $BB umount -l "$MtPt"
+  if ping -q -c 1 -W 3 ${Dev%:*} > /dev/null ; then
+    umount "$MtPt" || umount -l "$MtPt"
   else
-    $BB umount -f "$MtPt" || $BB umount -f -l "$MtPt"
+    umount -f "$MtPt" || umount -f -l "$MtPt"
   fi
 done
 
 stop_servers TERM
 stop_servers KILL
 
-if $BB pgrep '^pppd$' > /dev/null
+if pgrep '^pppd$' > /dev/null
 then
   echo "Shutting down ppp daemons"
-  $BB which poff > /dev/null && poff -a
+  which poff > /dev/null && poff -a
   for sig_spec in TERM KILL; do
-    $BB pgrep '^pppd$' > /dev/null && $BB killall -${sig_spec} pppd && $BB sleep 1
+    pgrep '^pppd$' > /dev/null && killall -${sig_spec} pppd && sleep 1
   done
 fi
 
@@ -99,12 +96,12 @@ fi
     case "$iface" in
       lo) ;;
       *) 
-        case $($BB cat "$iface/operstate") in
+        case $(cat "$iface/operstate") in
           down) ;;
           *)
             echo "Bringing down network interface '$iface'"
-            $BB ifconfig "$iface" down
-            $BB sleep 0.25s
+            ifconfig "$iface" down
+            sleep 0.25s
           ;;
         esac
       ;;
@@ -112,7 +109,7 @@ fi
   done
 )
 
-$BB sleep 1s
+sleep 1s
 
 local sig_spec
 for sig_spec in TERM KILL KILL; do
@@ -122,20 +119,20 @@ for sig_spec in TERM KILL KILL; do
     [ $some_pid -eq 1 ] && continue
     [ $some_pid -eq $$ ] && continue 
     [ -d /proc/$some_pid ] || continue
-    $BB kill -$sig_spec $some_pid
+    kill -$sig_spec $some_pid
   done
-  $BB sleep 1
+  sleep 1
 done
 
 N=0
 while [ $N -lt 10 ]; do
   if [ -e /proc/swaps ]; then
-    [ $($BB wc -l < /proc/swaps) -gt 1 ] && $BB swapoff -a 
+    [ $(wc -l < /proc/swaps) -gt 1 ] && swapoff -a 
   else
-    $BB swapoff -a # What else can we do if there is no /proc/swaps ?
+    swapoff -a # What else can we do if there is no /proc/swaps ?
   fi
   if [ -e /proc/mounts ] ; then
-    local mounts="$($BB cat /proc/mounts)"
+    local mounts="$(cat /proc/mounts)"
     echo "${mounts}" | while read dev mnt typ opt dmp pss; do
       case $mnt in
         /|/proc|/sys|/dev/pts|/dev) ;;
@@ -143,7 +140,7 @@ while [ $N -lt 10 ]; do
           case "$typ" in
             proc|devtmpfs|devpts|sysfs) ;;
             *)
-              if $BB umount -r $mnt; then
+              if umount -r $mnt; then
                 echo "Unmounted $dev on $mnt"
               else
                  sleep 2
@@ -154,40 +151,40 @@ while [ $N -lt 10 ]; do
       esac
     done
   fi
-  $BB sync
-  $BB mount -o remount,ro / && break
+  sync
+  mount -o remount,ro / && break
   N=$((N+1))
-  $BB sleep 1
+  sleep 1
   case $N in
     10)
       echo "Read-only remount of root filesystem failed after $N tries, giving up!"
       remount_ro_error_log='/var/log/remount-ro-error.log'
-      $BB touch $remount_ro_error_log || break
+      touch $remount_ro_error_log || break
       echo "PID   (Name)    cmdline" > $remount_ro_error_log
-      for P in $($BB fuser /); do
+      for P in $(fuser /); do
         printf "%s " $P
-        [ -e /proc/$P/status ] && $BB awk '/^Name:/ {printf(" (%s) ", $2)}'  /proc/$P/status  || printf " (???) "
-        [ -e /proc/$P/cmdline ] && $BB tr '\0' ' ' < /proc/$P/cmdline || printf "???"
+        [ -e /proc/$P/status ] && awk '/^Name:/ {printf(" (%s) ", $2)}'  /proc/$P/status  || printf " (???) "
+        [ -e /proc/$P/cmdline ] && tr '\0' ' ' < /proc/$P/cmdline || printf "???"
         echo
       done >> $remount_ro_error_log
       echo "Devices:" >> $remount_ro_error_log
-      $BB mount >> $remount_ro_error_log
+      mount >> $remount_ro_error_log
       echo "Check $remount_ro_error_log after next boot!"
       for N in 1 2 3
       do
-        $BB sync
-        $BB sync
-        $BB sleep 1
+        sync
+        sync
+        sleep 1
       done
-      exec $BB reboot -d 2 -f
+      exec reboot -d 2 -f
     ;;
     *) echo "Read-only remount of root filesystem failed, retrying..."  ;;
   esac
 done
 
 echo "Returning control to init"
-$BB sleep 1s
-exec $BB kill -KILL -1
+sleep 1s
+exec kill -KILL -1
 
 }
 

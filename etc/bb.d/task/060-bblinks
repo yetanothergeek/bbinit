@@ -10,10 +10,10 @@
 # might be read-only, we will create these links under /run/bbinit.
 task_start () {
 bbinit_bindir='/run/bbinit/'
-$BB mkdir -p $bbinit_bindir
+mkdir -p $bbinit_bindir
 
 for applet in klogd syslogd getty ; do
-  $BB ln -s '/bin/busybox' "$bbinit_bindir/$applet"
+  ln -s '/lib/bb/busybox' "$bbinit_bindir/$applet"
 done
 }
 

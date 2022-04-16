@@ -9,9 +9,9 @@ CheckSumFile="$EtcBbD/conf/checksums"
 
 Die () { echo "${0##*/}: ERROR: $@" 1>&2 ; exit 1 ; }
 
-Exe=$($BB readlink -f $0)
+Exe=$(readlink -f $0)
 [ -e "$Exe" ] || Exe=$0
-cd $($BB dirname "$Exe")/..
+cd $(dirname "$Exe")/..
 
 . ./install/help.sh # Check command line args, etc.
 
@@ -27,7 +27,7 @@ UniqueName () {
       N=$((N+1))
       if [ $N -gt 999 ] ; then # Already 999 backups??? Start over!
        # Overwrite oldest file that matches wildcard
-       $BB stat -c "%Y %n" $1* | $BB sort -n | $BB sed -ne 's/^.* //' -e '1p'
+       stat -c "%Y %n" $1* | sort -n | sed -ne 's/^.* //' -e '1p'
        return
       fi
     else
@@ -49,16 +49,16 @@ UniqueName () {
 # or a directory exists where we need a file,
 # that's badness, bail out now.
 for Type in d f ; do
-  for Obj in $($BB find etc/ usr/ -type $Type) ; do
+  for Obj in $(find etc/ usr/ -type $Type) ; do
   [ -e "$RootDir/$Obj" ] || continue
   [ -$Type "$RootDir/$Obj" ] || Die "Incompatible existing object: $RootDir/$Obj"
   done
 done
 
 
-ToBeKept=$(     $BB mktemp -t bbi-install-keep.XXXXXX )
-ToBeReplaced=$( $BB mktemp -t bbi-install-repl.XXXXXX )
-ToBeRenamed=$(  $BB mktemp -t bbi-install-back.XXXXXX )
+ToBeKept=$(     mktemp -t bbi-install-keep.XXXXXX )
+ToBeReplaced=$( mktemp -t bbi-install-repl.XXXXXX )
+ToBeRenamed=$(  mktemp -t bbi-install-back.XXXXXX )
 
 
 if [ -e "$RootDir$EtcBbD" ] ; then # Assume we are updating existing installation
@@ -66,7 +66,7 @@ if [ -e "$RootDir$EtcBbD" ] ; then # Assume we are updating existing installatio
   if [ -f "$RootDir$CheckSumFile" ] ; then
     while read Sum File ; do
       [ -e "$RootDir$File" ] || continue
-      if echo "$Sum  $RootDir$File" | $BB md5sum -c - &> /dev/null ; then
+      if echo "$Sum  $RootDir$File" | md5sum -c - &> /dev/null ; then
         # If file hasn't been modified since installed, mark it for deletion
         echo "$RootDir$File" >> "$ToBeReplaced"
       else
@@ -82,7 +82,7 @@ if [ -e "$RootDir$EtcBbD" ] ; then # Assume we are updating existing installatio
   else
     # If we don't have a checksum file, mark all files for deletion, except
     # for /etc/bb.d/rc.local and /etc/bb.d/conf/*
-    for File in $($BB find usr/ etc/ -type f | $BB sort) ; do
+    for File in $(find usr/ etc/ -type f | sort) ; do
       File="$RootDir/$File"
       case "$File" in
         $RootDir$EtcBbD/conf/*) echo "$File" >> "$ToBeKept" ;;
@@ -97,15 +97,15 @@ fi
 
 
 # Create any target directories that don't already exist.
-for Dir in $($BB find usr/ etc/ -type d | $BB sort) ; do
+for Dir in $(find usr/ etc/ -type d | sort) ; do
   $OP mkdir -p $RootDir/$Dir
 done
 
 # Create a file containing the checksums of the new "pristine" files.
 # We can use it on the next update to see if the user has modified anything.
 [ $1 = '-n' ] || \
-$BB md5sum $($BB find etc/ usr/ -type f | $BB sort) | \
-  $BB sed 's#  #  /#' > "$RootDir/$CheckSumFile"
+md5sum $(find etc/ usr/ -type f | sort) | \
+  sed 's#  #  /#' > "$RootDir/$CheckSumFile"
 
 Rename () {
   $OP mv $Ask "$1" "$2"
@@ -116,7 +116,7 @@ Install () {
 }
 
 
-for SrcFile in $($BB find usr/ etc/ -type f | $BB sort) ; do
+for SrcFile in $(find usr/ etc/ -type f | sort) ; do
   TrgFile="$RootDir/$SrcFile"
   Handled=0
   while read OldFile ; do
@@ -153,7 +153,7 @@ done
 
 rm -f "$ToBeKept" "$ToBeRenamed" "$ToBeReplaced"
 
-if [ "$1" = '-n' ] || [ $($BB id -u) = 0 ] ; then
+if [ "$1" = '-n' ] || [ $(id -u) = 0 ] ; then
   $OP chown -R 0:0 $RootDir$EtcBbD $RootDir$UsrShareBbInit
 fi
 
@@ -163,21 +163,21 @@ fi
 # be symlinks to our own version.
 # But either way, they MUST exist in /etc !
 for File in inittab mdev.conf ; do
-  [ -e $RootDir/etc/$File ] || $BB ln -s bb.d/conf/$File $RootDir/etc/$File
+  [ -e $RootDir/etc/$File ] || ln -s bb.d/conf/$File $RootDir/etc/$File
 done
 
 Identical () {
-  $BB diff -q "$1" "$2" > /dev/null
+  diff -q "$1" "$2" > /dev/null
 }
 
 for Dir in $RootDir/$EtcBbD $RootDir/$UsrShareBbInit ; do
   [ -d $Dir ] || continue
   for File in $(find $Dir -type f) ; do
     if [ -e "$File.old" ] && Identical "$File.old" "$File" ; then
-      $BB mv "$File.old" "$File"
+      mv "$File.old" "$File"
     fi
     if [ -e "$File.new" ] && Identical "$File" "$File.new" ; then
-      $BB rm "$File.new"
+      rm "$File.new"
     fi
   done
 done

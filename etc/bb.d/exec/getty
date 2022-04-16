@@ -1,5 +1,5 @@
 #!/lib/bb/sh
 
 [ -e /run/bbinit/getty ] && exec /run/bbinit/getty $@ || \
-exec /bin/busybox getty $@
+exec getty $@
 

@@ -1,4 +1,4 @@
 #!/lib/bb/sh
 # -*- mode: sh; -*-
 
-exec /bin/busybox ip $@
+exec ip $@

@@ -1,15 +1,14 @@
 #!/lib/bb/sh
 # -*- mode: sh; -*-
 
-export PATH=/sbin:/usr/sbin:/bin:/usr/bin
+export PATH=/lib/bb:/sbin:/usr/sbin:/bin:/usr/bin
 
 rcs_main () {
 
 printf 'Beginning %s [%s]\r' "$0" "$$" 1>&2
 printf 'Beginning %s [%s]\n' "$0" "$$"
 
-local BB='/bin/busybox'
-local MODULES_DIR="/lib/modules/$($BB uname -r)"
+local MODULES_DIR="/lib/modules/$(uname -r)"
 local include_file
 
 task_start () { : ; }

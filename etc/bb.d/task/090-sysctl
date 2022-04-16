@@ -6,7 +6,7 @@ task_start () {
 echo 'Loading sysctl settings...'
 local F
 for F in /etc/sysctl.d/*.conf /etc/sysctl.conf ; do
-  [ -f "$F" ] && $BB sysctl -p "$F"
+  [ -f "$F" ] && sysctl -p "$F"
 done
 unset F
 }

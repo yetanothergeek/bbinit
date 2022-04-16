@@ -7,11 +7,11 @@ echo 'Starting syslog daemon'
 local SysLogFile='/var/log/messages'
 local SysLogMaxKB='200'
 local SysLogPri='6'
-[ -L "$SysLogFile" ] && SysLogFile=$($BB readlink "$SysLogFile")
-SysLogDir=$($BB dirname "$SysLogFile")
+[ -L "$SysLogFile" ] && SysLogFile=$(readlink "$SysLogFile")
+SysLogDir=$(dirname "$SysLogFile")
 [ -d "$SysLogDir" ] || mkdir -p "$SysLogDir"
 
-$BB dmesg -n 2
+dmesg -n 2
 ${bbinit_bindir}syslogd -l "$SysLogPri" -s "$SysLogMaxKB" -O "$SysLogFile"
 ${bbinit_bindir}klogd -c 3
 }

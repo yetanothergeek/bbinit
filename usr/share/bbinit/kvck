@@ -3,7 +3,6 @@
 
 # Kernel version check.
 
-BB=/bin/busybox
 QUIET=
 UPDATE=
 KIMG=
@@ -11,7 +10,7 @@ RAMFS=
 
 
 usage () {
-$BB cat << EOF
+cat << EOF
 
  Check to see if a kernel matches an initramfs
  Usage: $0 [options] <kernel> <initramfs>
@@ -80,8 +79,8 @@ done
 case "$KIMG" in
   /*)
     readable "$KIMG"
-    KVER=$( $BB strings $KIMG | \
-      $BB awk 'BEGIN {found=0} (found==0) && /^[1-9]\.[0-9]+\.[0-9]+/ {print $1; found=1}'
+    KVER=$( strings $KIMG | \
+      awk 'BEGIN {found=0} (found==0) && /^[1-9]\.[0-9]+\.[0-9]+/ {print $1; found=1}'
     )
     [ -z "$KVER" ] && die "Unable to find kernel version" 1
   ;;
@@ -98,19 +97,19 @@ esac
 if [ -e "$RAMFS" ] ; then
   readable "$RAMFS"
   UZ=cat
-  case $($BB hexdump -n 2 -e '1 2 "%x"' "$RAMFS") in
+  case $(hexdump -n 2 -e '1 2 "%x"' "$RAMFS") in
     5a42) UZ='bzip2 -dc' ;;
     8b1f) UZ='gzip -dc' ;;
     37fd) UZ='xz -dc' ;;
   esac
-  for F in $($BB $UZ $RAMFS | $BB cpio -H newc -ti '*' 2> /dev/null) ; do
+  for F in $($UZ $RAMFS | cpio -H newc -ti '*' 2> /dev/null) ; do
     [ "$F" = "lib/modules/$KVER" ]     && say OK && exit 0
     [ "$F" = "usr/lib/modules/$KVER" ] && say OK && exit 0
   done
 fi
 
 if [ "$UPDATE" = 'yes' ] ; then
-  MKRFS=$($BB dirname $($BB readlink -f $0))/mkramfs
+  MKRFS=$(dirname $(readlink -f $0))/mkramfs
   $MKRFS $KVER $RAMFS
 else
   say FAIL

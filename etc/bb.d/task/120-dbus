@@ -8,7 +8,7 @@ local MakeNewMachID=0
 
 if type -p dbus-daemon &> /dev/null ; then
   if type -p dbus-uuidgen &> /dev/null ; then
-    $BB rm -f /run/dbus/pid /var/lib/dbus/machine-id
+    rm -f /run/dbus/pid /var/lib/dbus/machine-id
     if [ "$MakeNewMachID" != '0' ] ; then
       dbus-uuidgen > /etc/machine-id
     else
@@ -17,9 +17,9 @@ if type -p dbus-daemon &> /dev/null ; then
   fi
   local DBusDaemon=$(type -p dbus-daemon)
   # Causes problems if daemon links to libsystemd and systemd isn't running.
-  if ! $BB grep -Eq 'libsystemd|libelogind' "$DBusDaemon"; then
+  if ! grep -Eq 'libsystemd|libelogind' "$DBusDaemon"; then
     echo 'Starting dbus daemon...'
-    $BB mkdir -p /run/dbus
+    mkdir -p /run/dbus
     dbus-daemon --system
   fi
 fi

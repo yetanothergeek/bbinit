@@ -1,10 +1,8 @@
 #!/lib/bb/sh
 # -*- mode: sh; -*-
 
-BB=/bin/busybox
-
 usage () {
-$BB cat << EOF
+cat << EOF
 
 Usage:  $0 [option] <filename>
 List contents of an initramfs file.
@@ -42,7 +40,7 @@ for Arg in "$@" ; do
   esac
 done
 
-case $($BB hexdump -n 2 -e '1 2 "%x"' "$RAMFS") in
+case $(hexdump -n 2 -e '1 2 "%x"' "$RAMFS") in
   5a42) UZ='bzip2 -dc' ;;
   8b1f) UZ='gzip -dc' ;;
   37fd) UZ='xz -dc' ;;
@@ -50,8 +48,8 @@ esac
 
 
 if [ "$VERBOSE" -eq 0 ] ; then
-  $BB $UZ "$RAMFS" | $BB cpio -tv 2> /dev/null | $BB awk '{if (/^d.*/) {print $6 "/"} else {print $6} }' | sort
+  $UZ "$RAMFS" | cpio -tv 2> /dev/null | awk '{if (/^d.*/) {print $6 "/"} else {print $6} }' | sort
 else
-  $BB $UZ "$RAMFS" | $BB cpio -tv 2> /dev/null
+  $UZ "$RAMFS" | cpio -tv 2> /dev/null
 fi
 

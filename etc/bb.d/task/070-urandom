@@ -6,19 +6,19 @@ task_start () {
 echo 'Initializing random number generator...'
 local RANDOM_SEED='/var/lib/random-seed'
 if [ -f "$RANDOM_SEED" ]; then
-  $BB cat "$RANDOM_SEED" > /dev/urandom
+  cat "$RANDOM_SEED" > /dev/urandom
 else
-  $BB mkdir -p "${RANDOM_SEED%/*}"
-  $BB touch "$RANDOM_SEED"
+  mkdir -p "${RANDOM_SEED%/*}"
+  touch "$RANDOM_SEED"
 fi
-$BB chmod 600 "$RANDOM_SEED"
+chmod 600 "$RANDOM_SEED"
 local POOLFILE=/proc/sys/kernel/random/poolsize
 local BYTES=4096
-[ -r "$POOLFILE" ] && BYTES=$($BB cat "$POOLFILE")
+[ -r "$POOLFILE" ] && BYTES=$(cat "$POOLFILE")
 
 ( # Seed is saved on clean shutdown, but save now for unclean just in case. 
-  $BB sleep 5 # Wait a bit for entropy
-  $BB dd if=/dev/urandom of="$RANDOM_SEED" count=1 bs=$BYTES 2> /dev/null
+  sleep 5 # Wait a bit for entropy
+  dd if=/dev/urandom of="$RANDOM_SEED" count=1 bs=$BYTES 2> /dev/null
 ) &
 }
 
@@ -26,10 +26,10 @@ local BYTES=4096
 task_stop () {
 echo "Saving random seed..."
 local random_seed=/var/lib/random-seed
-$BB touch "$random_seed"
-$BB chmod 600 "$random_seed"
+touch "$random_seed"
+chmod 600 "$random_seed"
 local poolfile=/proc/sys/kernel/random/poolsize
-[ -r "$poolfile" ] && bytes=$($BB cat "$poolfile") || bytes=4096
-$BB dd if=/dev/urandom of="$random_seed" count=1 bs=$bytes 2> /dev/null
+[ -r "$poolfile" ] && bytes=$(cat "$poolfile") || bytes=4096
+dd if=/dev/urandom of="$random_seed" count=1 bs=$bytes 2> /dev/null
 }
 

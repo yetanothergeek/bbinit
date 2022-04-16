@@ -6,16 +6,15 @@
 set -e
 
 WKDIR=
-BB='/bin/busybox'
 
 trap '
 if [ -d "$WKDIR" ]; then
  for P in udhcpd httpd ftpd; do
   if [ -f $WKDIR/$P.pid ]; then
-   $BB kill $($BB cat $WKDIR/$P.pid) || :
+   kill $(cat $WKDIR/$P.pid) || :
   fi
  done
- $BB rm -r $WKDIR
+ rm -r $WKDIR
 fi
 ' INT EXIT
 
@@ -98,29 +97,29 @@ if [ -n "$BOOT_IMG" ] ; then
   [ -z "$KERNEL" ] || die "Cannot use -b and -k together"
   [ -z "$INITRD" ] || die "Cannot use -b and -f together"
   exist_or_die "$BOOT_IMG"
-  BOOT_IMG=$($BB readlink -f $BOOT_IMG)
+  BOOT_IMG=$(readlink -f $BOOT_IMG)
   isreg_or_die "$BOOT_IMG"
 else
   [ -n "$KERNEL" ] || die 'You must specify a disk image or kernel file to boot'
   exist_or_die "$KERNEL"
-  KERNEL=$($BB readlink -f $KERNEL)
+  KERNEL=$(readlink -f $KERNEL)
   isreg_or_die "$KERNEL"
   if [ -n "$INITRD" ] ; then
     exist_or_die "$INITRD"
-    INITRD=$($BB readlink -f $INITRD)
+    INITRD=$(readlink -f $INITRD)
     isreg_or_die $INITRD
   fi
 fi
 
 
 if [ -n "$SYSLINUX_DIR" ]; then
-  SYSLINUX_DIR=$($BB readlink -f "$SYSLINUX_DIR")
+  SYSLINUX_DIR=$(readlink -f "$SYSLINUX_DIR")
 else
   for D1 in '/' '/usr/' '/usr/local/'; do
     for D2 in '/lib/' '/share/'; do
       for D3 in '/' '/bios/'; do
         if [ -f "$D1/$D2/syslinux/$D3/pxelinux.0" ]; then
-          SYSLINUX_DIR=$($BB readlink -f "$D1/$D2/syslinux/$D3/")
+          SYSLINUX_DIR=$(readlink -f "$D1/$D2/syslinux/$D3/")
           break
         fi
       done
@@ -147,14 +146,14 @@ if [ -z "$NET_DEV" ] && [ -z "$LOCAL_IP" ]; then
 fi
 
 if [ -n "$NET_DEV" ]; then
-  $BB ifconfig "$NET_DEV" > /dev/null || die "Invalid network interface: $NET_DEV"
+  ifconfig "$NET_DEV" > /dev/null || die "Invalid network interface: $NET_DEV"
   if [ -z "$LOCAL_IP" ]; then
-    LOCAL_IP=$($BB ifconfig "$NET_DEV" | $BB awk '/^ *inet addr:/ {sub(/:/," "); print $3}')
+    LOCAL_IP=$(ifconfig "$NET_DEV" | awk '/^ *inet addr:/ {sub(/:/," "); print $3}')
   fi
 else
   if [ -n "$LOCAL_IP" ]; then
-    for IF in $($BB ifconfig | $BB awk '/^[^ \t]/ {print $1}'); do
-      if $BB ifconfig $IF | $BB grep -q "^ *inet addr:${LOCAL_IP//./\\.} "; then
+    for IF in $(ifconfig | awk '/^[^ \t]/ {print $1}'); do
+      if ifconfig $IF | grep -q "^ *inet addr:${LOCAL_IP//./\\.} "; then
         NET_DEV=$IF
         break
       fi
@@ -168,7 +167,7 @@ fi
 
 
 [ -n "$TEMP" ] || TEMP='/tmp'
-WKDIR=$($BB mktemp -d "$TEMP/pxe-XXXXXX")
+WKDIR=$(mktemp -d "$TEMP/pxe-XXXXXX")
 
 cd "$WKDIR"
 
@@ -176,7 +175,7 @@ cd "$WKDIR"
 
 PXECFG='pxelinux.cfg/default'
 
-hexopt () { printf "%s" "$@" | $BB hexdump -ve '/1 "%x"' ; }
+hexopt () { printf "%s" "$@" | hexdump -ve '/1 "%x"' ; }
 
 if [ "$STR_NULL" = 'yes' ] ; then
   BOOTFILEOPT="option 0x43 $(hexopt $BOOTFILE)00"
@@ -186,7 +185,7 @@ else
   CFGFILEOPT="option pxeconffile $PXECFG"
 fi
 
-$BB cat << EOF > "$WKDIR/udhcpd.conf"
+cat << EOF > "$WKDIR/udhcpd.conf"
 start $REMOTE_IP
 end $REMOTE_IP
 sname $LOCAL_IP
@@ -207,8 +206,8 @@ for SRC in \
   "$SYSLINUX_DIR/memdisk"
 do
   [ "x$SRC" = 'x' ] && continue
-  DST=$WKDIR/$($BB basename "$SRC")
-  [ -e "$DST" ] || $BB cp -ai "$SRC" "$DST"
+  DST=$WKDIR/$(basename "$SRC")
+  [ -e "$DST" ] || cp -ai "$SRC" "$DST"
 done
 
 cp -a "$SYSLINUX_DIR/." "$WKDIR/."
@@ -230,7 +229,7 @@ for A in $APPEND; do
   esac
 done
 if [ -z "$IMG_TYPE" ] ; then
-  for A in $($BB blkid "$BOOT_IMG") ; do
+  for A in $(blkid "$BOOT_IMG") ; do
     case "$A" in
       TYPE=*iso*)
         IMG_TYPE=iso
@@ -248,32 +247,32 @@ cat <<  EOF > "$WKDIR/$PXECFG"
 default pxe
 label pxe
   kernel  ${HOST_PATH}memdisk
-  append $APPEND initrd=${HOST_PATH}$($BB basename $BOOT_IMG)
+  append $APPEND initrd=${HOST_PATH}$(basename $BOOT_IMG)
 EOF
 else
 cat <<  EOF > "$WKDIR/$PXECFG"
 default pxe
 label pxe
-  linux ${HOST_PATH}$($BB basename $KERNEL)
+  linux ${HOST_PATH}$(basename $KERNEL)
 EOF
 if [ -n "$INITRD" ]; then
-  APPEND="initrd=${HOST_PATH}$($BB basename $INITRD) $APPEND"
+  APPEND="initrd=${HOST_PATH}$(basename $INITRD) $APPEND"
 fi
 echo append $APPEND >> "$WKDIR/$PXECFG"
 fi
 
-$BB udhcpd -I "$LOCAL_IP" "$WKDIR/udhcpd.conf"
+udhcpd -I "$LOCAL_IP" "$WKDIR/udhcpd.conf"
 
 case "$PROTO" in
 http)
-  $BB httpd -f -p "$LOCAL_IP:80" -h "$WKDIR" &
+  httpd -f -p "$LOCAL_IP:80" -h "$WKDIR" &
   echo $! > "$WKDIR/httpd.pid"
 ;;
 ftp)
-  $BB tcpsvd -vE "$LOCAL_IP" 21 $BB ftpd -vv "$WKDIR" &
+  tcpsvd -vE "$LOCAL_IP" 21 ftpd -vv "$WKDIR" &
   echo $! > "$WKDIR/ftpd.pid"
 ;;
 esac
 
-$BB udpsvd -E "$LOCAL_IP" 69 $BB tftpd -r "$WKDIR"
+udpsvd -E "$LOCAL_IP" 69 tftpd -r "$WKDIR"
 

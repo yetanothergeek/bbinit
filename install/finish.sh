@@ -39,10 +39,10 @@
   
   if [ "$1" = '-n' ] ; then
     echo
-    Ramfs=$($BB mktemp -t "__DryRun__ramfs.XXXXXX" )
+    Ramfs=$(mktemp -t "__DryRun__ramfs.XXXXXX" )
     echo ./$UsrShareBbInit/mkramfs $(uname -r) "$Ramfs"
     ./$UsrShareBbInit/mkramfs $(uname -r) "$Ramfs" || exit 1
-    $BB rm -f "$Ramfs"
+    rm -f "$Ramfs"
     echo
 #    exit
   else
@@ -57,7 +57,7 @@
   'ensure that you have a bootloader entry matching' \
   'these parameters:'
   
-  for Arg in $($BB cat /proc/cmdline); do
+  for Arg in $(cat /proc/cmdline); do
     case "$Arg" in
       rw) printf '  %s\n' ' ro' ;;
       initrd=*)

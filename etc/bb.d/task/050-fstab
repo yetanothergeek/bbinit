@@ -7,14 +7,14 @@ task_start () {
 if [ -f /etc/fstab ]; then
   echo 'Mounting filesystems in /etc/fstab...'
   local dev mtpt fstype opts freq passno rem  
-  $BB sed 's/\\040/\\ /g' /etc/fstab | while read dev mtpt fstype opts freq passno rem; do
+  sed 's/\\040/\\ /g' /etc/fstab | while read dev mtpt fstype opts freq passno rem; do
     case $opts in
       *noauto*)
         continue
       ;;
     esac
     case $dev in
-      UUID=*|LABEL=*) dev=$($BB findfs "$dev") ;;
+      UUID=*|LABEL=*) dev=$(findfs "$dev") ;;
     esac
     case $dev in
       /dev/*)
@@ -25,11 +25,11 @@ if [ -f /etc/fstab ]; then
         printf '%d' $passno &> /dev/null || passno=0
         case $fstype in
           ext[2-4]|vfat|msdos)
-            [ -d $MODULES_DIR ] && $BB modprobe $fstype 2> /dev/null
+            [ -d $MODULES_DIR ] && modprobe $fstype 2> /dev/null
             if type -p fsck.$fstype > /dev/null; then
               local fsck_cmd="fsck.$fstype -p $dev $forcefsck"
               if [ $passno -eq 0 ] || $fsck_cmd || $fsck_cmd; then
-                $BB mount -t $fstype -o $opts $dev $mtpt
+                mount -t $fstype -o $opts $dev $mtpt
               fi
             fi
           ;;
@@ -37,9 +37,9 @@ if [ -f /etc/fstab ]; then
       ;;
     esac
   done
-  $BB mkdir -p /dev/shm
-  $BB mount -a
-  $BB swapon -a
+  mkdir -p /dev/shm
+  mount -a
+  swapon -a
   echo 'fstab done.'
 else
   echo '/etc/fstab not found, skipping.'

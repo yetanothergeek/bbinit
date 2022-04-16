@@ -7,8 +7,6 @@
 # make tools that depend only on busybox, so...
 
 
-BB=/bin/busybox
-
 BeQuiet=0
 Warn () { [ $BeQuiet -eq 0 ] && echo "${0##*/}: Warning: $@" 1>&2 ; }
 Note () { echo "${0##*/}: $@" 1>&2 ; }
@@ -44,7 +42,7 @@ parse_elf_info () {
   # Read chunk of file and return the raw data ("topic" is for error info)
   #   RAW <start> <length> <topic>
   RAW () {
-    $BB dd bs=1 skip=$1 count=$2 if=$File 2> /dev/null || \
+    dd bs=1 skip=$1 count=$2 if=$File 2> /dev/null || \
       Die "RAW() Failed reading $3"
   }
 
@@ -52,7 +50,7 @@ parse_elf_info () {
   # Read chunk of file and return formatted data ("topic" is for error info)
   #   FMT <start> <length> <format> <topic>
   FMT () {
-    $BB hexdump -s "$1" -n "$2" -e "$3" "$File" || \
+    hexdump -s "$1" -n "$2" -e "$3" "$File" || \
       Die "FMT() Failed reading $4"
   }
 
@@ -233,7 +231,7 @@ parse_elf_info () {
   # and sometimes not. But it should never be less than zero.
   if [ "$dyn_strtab"  -a "$dyn_strsz"  -a "$name_offsets" ] ; then
     [ $dyn_strtab -ge $vaddr ] && dyn_strtab=$((dyn_strtab-vaddr)) # See above
-    StrTab=$(RAW $dyn_strtab $dyn_strsz 'stringtable' | $BB tr '\0' ' ')
+    StrTab=$(RAW $dyn_strtab $dyn_strsz 'stringtable' | tr '\0' ' ')
     for name_offset in $name_offsets ; do
       Library=${StrTab:$name_offset} # Starts at offset
       Library=${Library%% *} # Ends at space
@@ -245,7 +243,7 @@ parse_elf_info () {
 
 
 SORT () {
-  echo "$@" | $BB tr ' ' '\n' | $BB sort -u | $BB tr -s '\n' | $BB tr '\n' ' ';
+  echo "$@" | tr ' ' '\n' | sort -u | tr -s '\n' | tr '\n' ' ';
 }
 
 
@@ -323,8 +321,8 @@ GetLinkTargets () {
     if [ -L "$Dep" ] ; then
       Trg=$Dep
       while : ; do
-        cd $($BB dirname $Trg)
-        Trg=$(RealPath $($BB readlink $Trg))
+        cd $(dirname $Trg)
+        Trg=$(RealPath $(readlink $Trg))
         LinkTargets="$LinkTargets $Trg"
         [ -L "$Trg" ] || break
       done
@@ -369,7 +367,7 @@ ResolveDeps () {
 Expand () {
   case "$1" in
     /*) echo "$1" && return 0 ;;
-    */*) $BB realpath "$1" && return 0 ;;
+    */*) realpath "$1" && return 0 ;;
     *) type -p "$1" && return 0 ;;
   esac
   Warn "Can't find $1"

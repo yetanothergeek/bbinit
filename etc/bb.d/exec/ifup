@@ -2,4 +2,4 @@
 # -*- mode: sh; -*-
 
 export PATH=/etc/bb.d/exec:$PATH
-exec /bin/busybox ifup "$@"
+exec ifup "$@"

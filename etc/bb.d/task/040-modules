@@ -11,7 +11,7 @@ if [ -f /etc/modules ] && [ -d "$MODULES_DIR" ]; then
     case $m in
       \#*) ;;
       *) 
-        $BB modprobe $m
+        modprobe $m
       ;;
     esac
   done < /etc/modules

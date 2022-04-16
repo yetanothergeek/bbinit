@@ -2,8 +2,8 @@
 # -*- mode: sh; -*-
 
 [ -f /etc/inittab ] && [ -f /etc/bb.d/conf/inittab ] && \
-  ! /bin/busybox diff -q /etc/bb.d/conf/inittab /etc/inittab && \
-    /bin/busybox mount --bind /etc/bb.d/conf/inittab /etc/inittab
+  ! /lib/bb/busybox diff -q /etc/bb.d/conf/inittab /etc/inittab && \
+    /lib/bb/busybox mount --bind /etc/bb.d/conf/inittab /etc/inittab
 
-exec /bin/busybox init $@
+exec /lib/bb/busybox init $@
 

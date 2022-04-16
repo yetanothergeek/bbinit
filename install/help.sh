@@ -35,7 +35,7 @@ else
     /*) ;;
     *) Die "Root path must be absolute." ;;
   esac
-  RootDir=$(echo "$2" | $BB sed -e 's#/\+#/#g' -e 's#/$##') # No // or final /
+  RootDir=$(echo "$2" | sed -e 's#/\+#/#g' -e 's#/$##') # No // or final /
 fi
 
 
@@ -43,6 +43,6 @@ fi
 
 [ "$1" = '-n' ] || \
   [ -w "$RootDir" ] || \
-    [ $($BB id -u) = 0 ] || \
+    [ $(id -u) = 0 ] || \
       Die "You must be root to install or update bbinit"
 

@@ -4,7 +4,7 @@
 for ARG in "$@" ; do
   case "$ARG" in
     -*) ;;
-    *) [ -d "$ARG" ] && exec /bin/busybox run-parts "$@" ;;
+    *) [ -d "$ARG" ] && exec run-parts "$@" ;;
   esac
 done
 

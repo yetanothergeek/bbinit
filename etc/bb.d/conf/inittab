@@ -10,7 +10,7 @@ tty5::respawn:/etc/bb.d/exec/getty 0 tty5
 tty6::respawn:/etc/bb.d/exec/getty 0 tty6
 
 # Stuff to do for the 3-finger salute
-::ctrlaltdel:/bin/busybox reboot
+::ctrlaltdel:/lib/bb/busybox reboot
 
 # Stuff to do before rebooting
 ::shutdown:/etc/bb.d/rc0

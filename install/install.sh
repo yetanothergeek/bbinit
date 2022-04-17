@@ -1,8 +1,6 @@
 #!/lib/bb/sh
 # -*- mode: sh; -*-
 
-BB=/bin/busybox
-
 EtcBbD='/etc/bb.d'
 UsrShareBbInit='/usr/share/bbinit'
 CheckSumFile="$EtcBbD/conf/checksums"

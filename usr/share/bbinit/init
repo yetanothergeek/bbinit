@@ -7,7 +7,6 @@
 PATH='/bin:/sbin:/usr/bin:/usr/sbin'
 NEWROOT='/new_root'
 INIT_ARGS=''
-BB='/bin/busybox'
 loglevel=2
 mdev_log=""
 

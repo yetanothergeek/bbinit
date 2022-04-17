@@ -1,6 +1,6 @@
 [ $# -eq 1 ] || [ $# -eq 2 ] || Die "Try '${0#*/} -h'"
 
-OP=$BB
+OP=
 Ask=
 
 help () {

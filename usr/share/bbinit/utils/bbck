@@ -16,6 +16,25 @@ pwd rdev readlink realpath reboot rm run-parts sed sh sleep sort stat
 strings swapoff swapon switch_root sync sysctl syslogd test touch tr
 udhcpc uevent umount uname uptime wc which xz yes zstd'
 
+SkipApplet () {
+  local Skip
+  for Skip in $BBCK_SKIP_APPLETS; do
+    [ "$Skip" = "$1" ] && echo "NOTE: Skipping test for '$1' applet." && return
+  done
+  return 1
+}
+
+if [ "x$BBCK_SKIP_APPLETS" != 'x' ] ; then
+  TempList=''
+  for Need in $NeededApplets; do
+    if ! SkipApplet "$Need" ; then
+      TempList="$TempList $Need"
+    fi
+  done
+  NeededApplets=$TempList
+  TempList=''
+fi
+
 die () { echo "${0##*/}: ERROR: $@" 1>&2; exit 1; }
 
 [ $# -gt 0 ] && TestBB=$1 || TestBB=/lib/bb/busybox
@@ -25,6 +44,9 @@ case "$TestBB" in
     echo 'Tests busybox suitability for use with bbinit'
     echo "Usage: ${0##*/} [/path/to/busybox]"
     echo "Default test subject is /lib/bb/busybox"
+    echo
+    echo "To skip some applet tests, set environment:"
+    echo "  BBCK_SKIP_APPLETS='app1 app2 ...'"
     exit 0
   ;;
 esac

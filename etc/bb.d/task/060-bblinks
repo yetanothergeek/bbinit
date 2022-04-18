@@ -12,7 +12,7 @@ task_start () {
 bbinit_bindir='/run/bbinit/'
 mkdir -p $bbinit_bindir
 
-for applet in klogd syslogd getty ; do
+for applet in getty ; do
   ln -s '/lib/bb/busybox' "$bbinit_bindir/$applet"
 done
 }

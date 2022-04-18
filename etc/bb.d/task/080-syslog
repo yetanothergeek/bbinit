@@ -12,7 +12,7 @@ SysLogDir=$(dirname "$SysLogFile")
 [ -d "$SysLogDir" ] || mkdir -p "$SysLogDir"
 
 dmesg -n 2
-${bbinit_bindir}syslogd -l "$SysLogPri" -s "$SysLogMaxKB" -O "$SysLogFile"
-${bbinit_bindir}klogd -c 3
+syslogd -l "$SysLogPri" -s "$SysLogMaxKB" -O "$SysLogFile"
+klogd -c 3
 }
 

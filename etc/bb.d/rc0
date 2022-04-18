@@ -34,7 +34,6 @@ stop_servers () {
 }
 
 
-
 # Return a list of all PIDs, sorted by time: most recently started first, oldest last
 get_pid_list () {
   cd /proc
@@ -60,6 +59,16 @@ stop_tasks () {
 }
 
 
+# Return 0 if there are any block devices under /dev/mapper/
+have_devmaps () {
+  local devmap
+  for devmap in /dev/mapper/* ; do
+    [ -b "$devmap" ] && return 0
+  done
+  return 1
+}
+
+
 rcz_main () {
 
 cd /
@@ -80,9 +89,8 @@ done
 
 stop_servers TERM
 stop_servers KILL
-
-if pgrep '^pppd$' > /dev/null
-then
+local sig_spec
+if pgrep '^pppd$' > /dev/null ; then
   echo "Shutting down ppp daemons"
   which poff > /dev/null && poff -a
   for sig_spec in TERM KILL; do
@@ -111,13 +119,21 @@ fi
 
 sleep 1s
 
-local sig_spec
+# If there are devices in /dev/mapper/ and udevd is running
+# don't kill it else cryptsetup might hang.
+local udevd=0
+
 for sig_spec in TERM KILL KILL; do
   echo "Sending remaining processes the $sig_spec signal"
   local some_pid
   for some_pid in $(get_pid_list) ; do
     [ $some_pid -eq 1 ] && continue
-    [ $some_pid -eq $$ ] && continue 
+    [ $some_pid -eq $$ ] && continue
+    if have_devmaps ; then
+      comm="/proc/$some_pid/comm"
+      [ -e $comm ] && read exe < $comm && [ -n "$exe" ] \
+        && [ $exe = 'udevd' ] && udevd=1 && continue
+    fi
     [ -d /proc/$some_pid ] || continue
     kill -$sig_spec $some_pid
   done
@@ -132,7 +148,7 @@ while [ $N -lt 10 ]; do
     swapoff -a # What else can we do if there is no /proc/swaps ?
   fi
   if [ -e /proc/mounts ] ; then
-    local mounts="$(cat /proc/mounts)"
+    local mounts="$(tac /proc/mounts)"
     echo "${mounts}" | while read dev mnt typ opt dmp pss; do
       case $mnt in
         /|/proc|/sys|/dev/pts|/dev) ;;
@@ -142,8 +158,23 @@ while [ $N -lt 10 ]; do
             *)
               if umount -r $mnt; then
                 echo "Unmounted $dev on $mnt"
+                case "$dev" in
+                  /dev/mapper/*)
+                    MapDev=${dev##*/}
+                    if cryptsetup close "$MapDev" ; then
+                      echo "Removed mapping $dev"
+                    else
+                      echo "Failed to remove mapping $dev"
+                    fi
+                    if [ $udevd = 1 ] && ! have_devmaps ; then
+                      killall udevd
+                      udevd=0
+                    fi
+                  ;;
+                esac
               else
-                 sleep 2
+                echo "Failed to unmount $dev on $mnt"
+                sleep 2
               fi
             ;;
           esac

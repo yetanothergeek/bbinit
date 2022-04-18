@@ -2,30 +2,18 @@
 # -*- mode: sh; -*-
 
 # Start mdev hotplugging, either by the old /proc/sys/kernel/hotplug
-# method or the newer netlink-based "uevent" daemon
+# method or the newer netlink-based "mdev -d" daemon
 task_start () {
-local mdev=$(which mdev 2> /dev/null)
-if [ "x$mdev" = 'x' ] ; then
-  if /lib/bb/busybox --help mdev &>/dev/null; then
-    ln -sf /lib/bb/busybox /sbin/mdev && mdev=/sbin/mdev
-  fi
+local mdev='/lib/bb/mdev'
+[ -e "$mdev" ] || ln -sf busybox $mdev || mdev='/lib/bb/busybox mdev'
+echo 'Initializing mdev'
+if [ -e /proc/sys/kernel/hotplug ] ; then
+  echo 'Enabling legacy hotplugging.'
+  echo $mdev > /proc/sys/kernel/hotplug
+else
+  echo "Starting mdev in daemon mode" 
+  $mdev -d &
 fi
-
-if [ "x$mdev" != 'x' ] ; then
-  echo 'Initializing mdev'
-  if [ -e /proc/sys/kernel/hotplug ] ; then
-    echo 'Enabling legacy hotplugging.'
-    echo $mdev > /proc/sys/kernel/hotplug
-  else
-    local uevent=$(which uevent 2> /dev/null)
-    if [ "x$uevent" = 'x' ] ; then
-      if /lib/bb/busybox --help uevent &>/dev/null; then
-        ln -sf /lib/bb/busybox /sbin/uevent && uevent=/sbin/uevent
-      fi
-    fi
-    [ "x$uevent" != 'x' ] && echo "Starting $uevent" && $uevent $mdev &
-  fi
-  $mdev -s
-fi
+$mdev -s
 }
 

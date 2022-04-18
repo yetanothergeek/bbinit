@@ -63,10 +63,8 @@ if type -p mdev &> /dev/null ; then
   if [ -e /proc/sys/kernel/hotplug ] ; then 
     echo $(type -p mdev) > /proc/sys/kernel/hotplug
   else
-    if type -p uevent &>/dev/null; then
-      INFO 'Starting ramfs uevent daemon'
-      uevent $(type -p mdev) &
-    fi
+    INFO 'Starting ramfs mdev daemon'
+    mdev -d
   fi
   mdev -s
 fi
@@ -186,8 +184,8 @@ mount -o ro "$root" "$NEWROOT" ||  FAIL "Couldn't mount root FS read-only!"
 [ "x$init" = 'x' ] && init='/sbin/init'
 [ -f "$NEWROOT/$init" ] || FAIL "$root successfully mounted but no $init found!"
 
-P=$(pidof uevent 2> /dev/null)
-[ $? -eq 0 ] && INFO "Stopping ramfs uevent daemon" && kill $P
+P=$(pidof mdev 2> /dev/null)
+[ $? -eq 0 ] && INFO "Stopping ramfs mdev daemon." && kill $P
 
 if [ -f "$mdev_log" ] ; then
   printf '==== preparing to switch_root, up %s sec.\n' \

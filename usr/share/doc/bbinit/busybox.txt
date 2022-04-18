@@ -2,18 +2,22 @@ Not included here, but this is the "Swiss Army Knife" executable that
 performs many of the functions used by bbinit. It is also copied to the
 initial ramfs, therefore your build of busybox should be a statically
 linked binary not requiring any additional shared libraries. It should
-have most of the available "applets" enabled. As of this writing, 
-the default build in the Arch Linux "community" repository works nicely.
-For Alpine Linux you should ensure that you have installed the 
-"busybox-static" apk package before building the initramfs.
-
-The busybox packages from OpenSuse and VoidLinux WILL NOT WORK!
-They are missing some key features required to bring up the system.
-Better to grab the latest precompiled version from :
-  https://busybox.net/downloads/binaries/ *-defconfig-multiarch/busybox-*
-or build your own statically-linked busybox from source, preferably 
-using musl-gcc.
+have most of the available "applets" enabled. Earlier versions of bbinit
+tried to rely on distro-provided /bin/busybox for some systems, but this 
+turned out to be an unreliable and fragile dependency. So for now bbinit 
+depends on a user-provided /lib/bb/busybox . Hopefully more detailed
+instructions and perhaps an automated installer will be implemented.
+Note that newer versions of Arch Linux (and possibly some others)
+have switched to using ZSTD compression for kernel modules, which
+upstream busybox does not support. However there are  some patches 
+available to add ZSTD compression support to busybox and its module
+utilities. (This is also on my TODO list)
 
 For handling hotplugging events on recent kernels it is strongly 
 recommended that your busybox has the "uevent" applet enabled.
+
+Generally speaking, the biggest, fattest, most feature-filled busybox
+configuration is probably your best bet. Most of the extra features
+don't add much to the binary size and might even come in handy for 
+other use cases, even if bbinit doesn't strictly require them.
 

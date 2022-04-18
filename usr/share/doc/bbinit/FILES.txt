@@ -31,7 +31,7 @@ initramfs, that is, one that is compatible with a wider variety
 of hardware.
 
 /usr/share/bbinit/utils/:
-The  directory contains some non-essential files which might come in
+The directory contains some non-essential files which might come in
 handy when working with bbinit. Consult the file ./utils.txt
 for a detailed listing of these utilities. 
 
@@ -84,23 +84,25 @@ BEFORE /etc/bb.d/rc0 runs its default operations. You should customize
 this file by adding/removing commands to the appropriate start/stop 
 section to suit the specific needs of your system.
 
-./dist/arch/bbinit:
-This script is specific to Arch Linux based systems for booting a kernel
-installed by pacman. See the comments at the beginning of the script for
-instructions on how to enable it.
+./usr/share/libalpm/hooks/59-bbinit-remove.hook
+./usr/share/libalpm/hooks/91-bbinit-install.hook
+./usr/share/libalpm/scripts/bbinit-install
+./usr/share/libalpm/scripts/bbinit-remove:
+These scripts are specific to Arch Linux based systems for updating
+the initramfs after a kernel update by pacman.
 
-./dist/void/99-bbinit:
-This script is specific to Void Linux based systems for booting a kernel
-installed by xbps. See the comments at the beginning of the script for
-instructions on how to enable it.
+./etc/kernel.d/post-install/99-bbinit
+./etc/kernel.d/post-remove/21-bbinit:
+These scripts are specific to Void Linux based systems for updating
+the initramfs after a kernel update by xbps.
 
-/bin/busybox:
+/lib/bb/busybox:
 This is the "Swiss Army Knife" executable performs many of the functions
 used by bbinit. See the file ./busybox.txt for information on the
 requirements of this important, user-supplied piece of the system.
 
 /etc/bb.d/init:
-This script executes the single command: "exec /bin/busybox init".
+This script executes the single command: "exec /lib/bb/busybox init".
 It should be passed to the kernel command line in your bootloader as
 "init=/etc/bb.d/init" to ensure that the busybox version of init
 is launched, in case your system has an incompatible version of
@@ -108,7 +110,7 @@ is launched, in case your system has an incompatible version of
 
 /etc/bb.d/exec/:
 This directory contains additional scripts that may be used by bbinit
-or other scripts to launch the corrsponding busybox applets. At the time
+or other scripts to launch the corresponding busybox applets. At the time
 of this writing it mostly contains wrappers around busybox's ifup, ifdown
 and related commands. It also contains the autologin script described below.
 

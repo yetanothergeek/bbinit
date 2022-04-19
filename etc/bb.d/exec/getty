@@ -1,5 +1,0 @@
-#!/lib/bb/sh
-
-[ -e /run/bbinit/getty ] && exec /run/bbinit/getty $@ || \
-exec getty $@
-

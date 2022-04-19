@@ -4,7 +4,7 @@
 [ -f /etc/bb.d/conf/autologin.conf ] && . /etc/bb.d/conf/autologin.conf
 
 # If no username is specified, fallback to normal login prompt
-[ "x$AUTOLOGIN" = 'x' ] && exec getty 0 tty1
+[ "x$AUTOLOGIN" = 'x' ] && exec getty 0 -l login tty1
 
 # If username is '?' try to find "autologin=" on kernel command line
 if [ "$AUTOLOGIN" = '?' ] && [ -r '/proc/cmdline' ]; then

@@ -2,15 +2,15 @@
 
 ::sysinit:/etc/bb.d/rcS
 
-tty1::respawn:/etc/bb.d/exec/getty -n -l /etc/bb.d/exec/autologin 0 tty1
-tty2::respawn:/etc/bb.d/exec/getty 0 tty2
-tty3::respawn:/etc/bb.d/exec/getty 0 tty3
-tty4::respawn:/etc/bb.d/exec/getty 0 tty4
-tty5::respawn:/etc/bb.d/exec/getty 0 tty5
-tty6::respawn:/etc/bb.d/exec/getty 0 tty6
+tty1::respawn:/lib/bb/getty -n -l /etc/bb.d/exec/autologin 0 tty1
+tty2::respawn:getty 0 -l login tty2
+tty3::respawn:getty 0 -l login tty3
+tty4::respawn:getty 0 -l login tty4
+tty5::respawn:getty 0 -l login tty5
+tty6::respawn:getty 0 -l login tty6
 
 # Stuff to do for the 3-finger salute
-::ctrlaltdel:/lib/bb/busybox reboot
+::ctrlaltdel:reboot
 
 # Stuff to do before rebooting
 ::shutdown:/etc/bb.d/rc0

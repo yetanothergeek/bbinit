@@ -1,7 +1,7 @@
 #!/lib/bb/sh
 # -*- mode: sh; -*-
 
-export PATH=/lib/bb:/sbin:/usr/sbin:/bin:/usr/bin
+export PATH=/sbin:/usr/sbin:/bin:/usr/bin
 
 rcs_main () {
 

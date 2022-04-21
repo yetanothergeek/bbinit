@@ -1,5 +1,0 @@
-#!/lib/bb/sh
-# -*- mode: sh; -*-
-
-export PATH=/etc/bb.d/exec:$PATH
-exec ifup "$@"

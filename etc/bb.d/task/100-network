@@ -7,6 +7,22 @@ echo 'Configuring network interfaces...'
 [ -f /etc/hostname ] && hostname -F /etc/hostname
 ifconfig lo 127.0.0.1 up netmask 255.0.0.0
 [ -f /etc/mactab ] && nameif -c /etc/mactab
-[ -f /etc/network/interfaces ] && /etc/bb.d/exec/ifup -a &
+if [ -f /etc/network/interfaces ] ; then
+  if grep -qw dhcp /etc/network/interfaces ; then
+    if ifup -anm | grep -q '^udhcpc ' ; then
+     local UDHCPC_SCRIPT=$(udhcpc --help 2>&1 | awk '/^[\t ]+-s / {
+       sub(/^[^\/]+/,"");
+       sub(/)$/,""); print
+     }')
+     if [ ! -e "$UDHCPC_SCRIPT" ] ; then
+       local UDHCPC_SCRIPT_DIR=$(dirname "$UDHCPC_SCRIPT")
+       if mkdir -p "$UDHCPC_SCRIPT_DIR" 2> /dev/null ; then
+         ln -s /etc/bb.d/exec/udhcpc.sh "$UDHCPC_SCRIPT"
+       fi
+     fi
+    fi
+  fi
+  ifup -a &
+fi
 }
 

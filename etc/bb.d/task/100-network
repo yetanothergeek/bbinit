@@ -8,8 +8,9 @@ echo 'Configuring network interfaces...'
 ifconfig lo 127.0.0.1 up netmask 255.0.0.0
 [ -f /etc/mactab ] && nameif -c /etc/mactab
 if [ -f /etc/network/interfaces ] ; then
+  IfUp () { SHELL=/lib/bb/sh ifup $@ ; } # Need busybox SHELL for run-parts
   if grep -qw dhcp /etc/network/interfaces ; then
-    if ifup -anm | grep -q '^udhcpc ' ; then
+    if IfUp -anm | grep -q '^udhcpc ' ; then
      local UDHCPC_SCRIPT=$(udhcpc --help 2>&1 | awk '/^[\t ]+-s / {
        sub(/^[^\/]+/,"");
        sub(/)$/,""); print
@@ -22,7 +23,8 @@ if [ -f /etc/network/interfaces ] ; then
      fi
     fi
   fi
-  ifup -a &
+  IfUp -a &
+  unset -f IfUp
 fi
 }
 

@@ -12,9 +12,9 @@ free fsck fuser getty grep gzip halt hd head hexdump hostname id
 ifconfig ifdown ifup init install ip kill killall klogd last less
 ln logger login md5sum mdev mkdir mknod mktemp modinfo modprobe mount
 mountpoint mv nameif netstat passwd pgrep pidof ping poweroff printf
-pwd rdev readlink realpath reboot rm run-parts sed sh sleep sort stat
-strings swapoff swapon switch_root sync sysctl syslogd test touch tr
-udhcpc uevent umount uname uptime wc which xz yes zstd'
+pwd rdev readlink realpath reboot rm run-parts sed seedrng sh sleep
+sort stat strings swapoff swapon switch_root sync sysctl syslogd test
+touch tr udhcpc uevent umount uname uptime wc which xz yes zstd'
 
 SkipApplet () {
   local Skip

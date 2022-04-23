@@ -23,7 +23,13 @@ if [ -f /etc/network/interfaces ] ; then
      fi
     fi
   fi
-  IfUp -a &
+  local PROG MSG
+  IfUp -a 2>&1  | while read PROG MSG ; do
+    case "$PROG" in
+      udhcpc*) logger -t "${PROG/:/}" -p daemon.notice "$MSG" ;;
+      *) logger -s -t "${PROG/:/}" -p daemon.warn "$MSG" ;;
+    esac
+  done &
   unset -f IfUp
 fi
 }

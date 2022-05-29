@@ -7,6 +7,8 @@ QUIET=
 UPDATE=
 KIMG=
 RAMFS=
+GENERIC=
+FORCE=
 
 
 usage () {
@@ -16,7 +18,9 @@ cat << EOF
  Usage: $0 [options] <kernel> <initramfs>
  Options:
    -q Quiet mode
-   -u Update initramfs if needed 
+   -u Update initramfs only if needed
+   -f Force initramfs rebuild even if it matches kernel
+   -g Use generic (host-independent) options for initramfs
 
  If <kernel> parameter begins with a slash, it is assumed
  to be the path to a kernel image file. 
@@ -56,6 +60,8 @@ while [ $# -gt 0 ] ; do
   case $1 in
     -q)  QUIET=yes ;;
     -u)  UPDATE=yes ;;
+    -g)  GENERIC=yes; UPDATE=yes ;;
+    -f)  FORCE=yes;   UPDATE=yes ;;
     -h|--help) usage 0 ;;
     -*) die "Unknown option '$1'" ;;
     *)
@@ -94,7 +100,7 @@ case "$KVER" in
 esac
 
 
-if [ -e "$RAMFS" ] ; then
+if [ -e "$RAMFS" ] && [ "$FORCE" != 'yes' ] ; then
   readable "$RAMFS"
   UZ=cat
   case $(hexdump -n 2 -e '1 2 "%x"' "$RAMFS") in
@@ -109,7 +115,8 @@ if [ -e "$RAMFS" ] ; then
 fi
 
 if [ "$UPDATE" = 'yes' ] ; then
-  MKRFS=$(dirname $(readlink -f $0))/mkramfs
+  [ "$GENERIC" = 'yes' ] && MKRFS=generic || MKRFS=mkramfs
+  MKRFS=$(dirname $(readlink -f $0))/$MKRFS
   $MKRFS $KVER $RAMFS
 else
   say FAIL

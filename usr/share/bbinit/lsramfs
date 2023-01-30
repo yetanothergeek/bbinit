@@ -44,6 +44,8 @@ case $(hexdump -n 2 -e '1 2 "%x"' "$RAMFS") in
   5a42) UZ='bzip2 -dc' ;;
   8b1f) UZ='gzip -dc' ;;
   37fd) UZ='xz -dc' ;;
+  b528) UZ='zstd -dc' ;;
+  3730) UZ='cat' ;;
 esac
 
 

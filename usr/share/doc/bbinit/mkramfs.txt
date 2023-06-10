@@ -12,11 +12,6 @@ This script supports two [optional] command line arguments:
      to be an absolute path, otherwise it will be created in /boot/.
 
 The script also recognizes these environment variables:
-  BBI_EXCLUDE_MDIRS: 
-    Modules in these subdirectories of /lib/modules/<kernel>/
-    will be excluded from the initramfs, the default is 
-    "cpufreq gpu hotplug kvm sound watchdog"
-  
   BBI_COMPRESSOR:
     This tells the script which program should be used to compress
     the ramfs. Options include gzip, bzip2, or xz. The default is gzip.
@@ -31,7 +26,7 @@ The script also recognizes these environment variables:
 
   BBI_RAMFS_INIT:
     The initramfs image contains a /init script in its root directory.
-    By default this script copied from /usr/share/bbinit/init but if
+    By default this script is copied from /usr/share/bbinit/init but if
     for some reason you want to use your own init script (or a modified
     copy of the default) you can specify it here. It doesn't matter what
     name you give your script, the copy in the initramfs will always be

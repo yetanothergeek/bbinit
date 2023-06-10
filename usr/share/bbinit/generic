@@ -28,15 +28,9 @@ USB_MODS=$(all_mods_in drivers/usb/storage)' usb-common'
 HCI_MODS=$(all_mods_in drivers/usb/host | grep '^[eoux]hci')
 MTD_MODS='mtdblock phram' # e.g. to mount iso from memdisk/pxe
 
-NET_MODS=
-for D in ethernet phy ppp usb; do 
-  TMP_MODS=$(all_mods_in drivers/net/$D)
-  NET_MODS="$NET_MODS $TMP_MODS"
-done
-
 export BBI_EXTRA_MODULES="$BBI_EXTRA_MODULES \
 $ATA_MODS $KBD_MODS $FS_MODS $STG_MODS $HID_MODS $USB_MODS $HCI_MODS \
-$MTD_MODS $NET_MODS"
+$MTD_MODS"
 
 export BBI_IGNORE_HOST='1'
 

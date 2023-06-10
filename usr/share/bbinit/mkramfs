@@ -1,237 +1,256 @@
 #!/lib/bb/sh
-# -*- mode: sh; -*-
 
-DEBUG () { echo -en "$@" 1>&2; }
+INFO  () { echo -en "$@" 1>&2; }
+WARN  () { printf "*** Warning: %s\n" "$@" 1>&2; }
+ERROR () { printf "*** ERROR: %s\n" "$@" 1>&2; }
+FATAL () { ERROR "$@"; exit 1; }
 
-WARN () { printf "*** Warning: %s\n" "$@" 1>&2; }
 
-
-have_cpu_flag () {
-  [ -f /proc/cpuinfo ] && [ -r /proc/cpuinfo ] || return 1
-  local Line
-  while read Line ; do
-    case "$Line" in 
-      flags*:*)
-        local Flag
-        for Flag in $Line ; do
-          [ "$Flag" = "$1" ]  && return 0
-        done
-      ;;
-    esac
-  done < /proc/cpuinfo
-  return 1
+OneOrZero () {
+ local V=$(eval echo $(echo "\$$1"))
+ case "$V" in
+   0|1) ;;
+   *) FATAL "\"$1\" must be 0 or 1, not '$V'" ;;   
+ esac
 }
 
 
-have_module () {
-  local N=$(find "$MODULES_SRC_DIR" -type f -name "$1" | wc -l)
-  [ "$N" -eq 0 ] && return 1 || return 0
-}
-
-get_softdeps () {
-
-  local AllModules=""
-
-  order_module () {
-    local M="$1"
-    case "$M" in
-      crc32c) # If CPU supports SSE 4.2 we can use hardware accel for CRC-32
-        if have_cpu_flag 'sse4_2' && have_module 'crc32c[-_]intel.ko*' ; then
-          M='crc32c_intel'
-        else
-          if have_module 'crc32c[-_]generic.ko*' ; then
-            M='crc32c_generic'
-          fi
-        fi
-      ;;
-    esac
-    local E
-    for E in $AllModules ; do [ "$E" = "$M" ] && return; done
-    AllModules="$AllModules $M"
-  }
-  local modules_softdep="$MODULES_SRC_DIR/modules.softdep"
-  local etc_modules="$1"
-  [ -f "$modules_softdep" ] || return
-  [ -f "$etc_modules" ] || return 
-  local eMod eOpts
-  while read eMod eOpts ; do
-    eMod=${eMod//-/_}
-    local kWord kMod kOpts
-    while read kWord kMod kOpts ; do
-      [ "$kWord" = 'softdep' ] || continue
-      kMod=${kMod//-/_}
-      if [ "$eMod" = "$kMod" ] ; then
-        local PreMods=""
-        local PostMods=""
-        local Mode='pre'
-        local kOpt
-        for kOpt in $kOpts ; do
-          case "$kOpt" in
-            pre:) Mode='pre' ;;
-            post:) Mode='post' ;;
-            *) 
-              case "$Mode" in
-                pre) PreMods="$PreMods $kOpt" ;;
-                post) PostMods="$PostMods $kOpt" ;;
-              esac
-            ;;
-          esac
-        done
-        for M in $PreMods ; do order_module "$M" ; done
-        order_module "$eMod"
-        for M in $PreMods ; do order_module "$M" ; done
-      fi
-    done < "$modules_softdep"
-    order_module "$eMod"
-  done < "$etc_modules"
-  echo $AllModules | tr \  \\n > "$2"
-}
-
-
-resolve_softdeps () {
-  local etc_modules="$1"
-  local etc_modules_tmp="$etc_modules.tmp"
-  rm -f "$etc_modules_tmp"
-  touch "$etc_modules_tmp"
-  local Try=0
-  while [ "$Try" -lt 32 ] ; do
-    get_softdeps "$etc_modules" "$etc_modules.tmp"
-    if diff -q "$etc_modules" "$etc_modules.tmp" > /dev/null ; then
-      rm -f "$etc_modules_tmp"
-      return 0
-    else
-      mv "$etc_modules.tmp" "$etc_modules"
-      touch "$etc_modules"
+gen_lookups () {
+  if ! [ -f "$ModAlias" ]; then
+    WARN "Cannot find $ModAlias"
+    return 1
+  fi
+  local footer='esac; }'
+  INFO 'Parsing modules.alias... '
+  local ModAliasTmp=./tmp/ModAliasTmp
+  awk '/^alias / {
+        gsub(/\(/,"\"(\"")
+        gsub(/\)/,"\")\"")
+    printf("%s %s\n",$2,$3)
+  }' "$ModAlias" | sort > "$ModAliasTmp"
+  INFO 'done.\n'
+  INFO 'Generating lookup tables... '
+  LookUp=./tmp/LookUp
+  C=''
+  while read A M ; do
+    I=${A:0:1}
+    if [ "$I" != "$C" ]; then
+      [ "$C" ] && echo $footer
+      echo "lookup_$I" '() { case "$1" in'
+      C="$I"
     fi
-    Try=$((Try+1))
+    echo "$A) echo '$M' ;;"
+  done < "$ModAliasTmp" > "$LookUp"
+  echo $footer >> "$LookUp"
+  rm -f "$ModAliasTmp"
+  . "$LookUp"
+  rm -f "$LookUp"
+  INFO 'done.\n'
+}
+
+resolve_alias () { 
+  lookup_${1:0:1} "$1"
+}
+
+sysfs_mods () {
+  [ $BBI_IGNORE_HOST = 1 ] && return
+  [ ! -f "$ModAlias" ] && WARN "Build may be incomplete" && return 1
+  local A
+  for A in $(
+    find /sys/devices/ -type f -name modalias -exec cat {} + 2> /dev/null \
+    | sort -u
+  ) ; do
+    resolve_alias "$A"
+  done | sort -u
+}
+
+get_modfile () {
+  if [ -e "$MODULES_SRC_DIR/modules.order" ] ; then
+    local F=$MODULES_SRC_DIR/$(
+      grep "/${1//[_-]/[_-]}.ko$" "$MODULES_SRC_DIR/modules.order"
+    )*
+    F=$(echo $F)
+    [ -e "$F" ] && echo "$F"
+  else
+    find "$MODULES_SRC_DIR/kernel" -type f -name "${1//[_-]/[_-]}.ko*"
+  fi
+}
+
+Keepers='\
+input/keyboard
+input/serio
+usb
+scsi
+ata
+block
+'
+
+base_modules () {
+  for M in $(sysfs_mods) ; do 
+    F=$(get_modfile "$M")
+    case "$F" in
+      */drivers/*) 
+        case "$F" in
+          */mousedev.ko*|*/pcspkr.ko*) ;;
+          *)
+            for K in $Keepers; do
+              case "$F" in
+                */drivers/$K/*) echo ${M//-/_} ;;
+              esac
+            done
+          ;;        
+        esac
+      ;;   
+    esac
   done
-  echo "Warning: unknown error resolving soft module dependencies"
+  for M in $BBI_EXTRA_MODULES ; do
+   echo "${M//-/_}"
+  done
+}
+
+NewList=
+Listed () {
+  local M
+  for M in $NewList; do
+    [ $M = $1 ] && return 0
+  done
   return 1
 }
 
 
-resolve_alias () {
-  case "$@" in
-    pci:*) lookup_pci "$@" ;;
-    usb:*) lookup_usb "$@" ;;
-    *) lookup_etc "$@" ;;
-  esac
+SoftDepsHandled=0
+
+get_soft_deps () {
+  NewList=$ModList
+  local N=0
+  for MyMod in $ModList; do
+    N=$((N+1))
+    [ $N -le $SoftDepsHandled ] && continue
+    while read Mod Deps; do
+    if [ "$Mod" = "$MyMod" ] ; then 
+      for Dep in $Deps; do
+        if [ "$Dep" = 'crc32c' ] ; then
+          if grep -qs '^flags.*\<sse4_2\>' /proc/cpuinfo; then
+             Dep='crc32c_intel'
+          else
+            Dep='crc32c_generic'
+          fi
+        else
+          local RealName=$(resolve_alias $Dep)
+          [ "$RealName" ] && Dep=$RealName
+        fi
+      done
+      Listed $Dep || NewList="$NewList $Dep"
+    fi
+    done < "$softdeps"
+  done
+  NewList=$(echo $NewList)
+  local Diff=$((${#NewList}-${#ModList}))
+  ModList=$NewList
+  [ $Diff -eq 0 ] && return 1 || return 0
+}
+
+
+HardDepsHandled=0
+
+get_hard_deps () {
+  NewList=$ModList
+  local N=0
+  for MyMod in $ModList; do
+    N=$((N+1))
+    [ $N -le $HardDepsHandled ] && continue
+    local Deps=$(grep "^$MyMod " "$harddeps") || continue
+    for Dep in $Deps; do
+      Listed $Dep || NewList="$NewList $Dep"
+    done
+  done
+  HardDepsHandled=$N
+  NewList=$(echo $NewList)
+  local Diff=$((${#NewList}-${#ModList}))
+  ModList=$NewList
+  [ $Diff -eq 0 ] && return 1 || return 0
 }
 
 
 get_deps () {
-  local Pattern="/${1//[-_]/[-_]}\.ko\(\.\([gx]z\|zst\)\)*:"
-  grep "$Pattern" $MODULES_SRC_DIR/modules.dep | sed -e 's/://' -e 's/ /\n/g'
-}
+INFO "Resolving module dependencies..."
 
+softdeps=./tmp/softdeps
+sed \
+-e 's/^softdep[ \t]*//' \
+-e 's/[ \t]pre:/ /g' \
+-e 's/[ \t]post:/ /g' \
+-e 's/[ \t]platform:/ /g' \
+-e 's/-/_/g' \
+$MODULES_SRC_DIR/modules.softdep > "$softdeps"
+
+harddeps=./tmp/harddeps
+sed \
+-e 's#[^ \t]*/##g' \
+-e 's/\.[^ \t]*//g' \
+-e 's/-/_/g' \
+$MODULES_SRC_DIR/modules.dep > "$harddeps"
+
+Loop=0
+while get_hard_deps || get_soft_deps ; do
+  INFO .
+  Loop=$((Loop+1))
+  if [ $Loop -ge 32 ] ; then
+    WARN "Unable to recurse dependencies after $Loop tries, giving up."
+    break
+  fi
+done
+INFO ' done.\n'
+rm -f "$harddeps"
+rm -f "$softdeps"
+}
 
 
 list_modules () {
-  local blacklist='./tmp/blacklist'
-  local modalias='./tmp/modalias'
-  local caselist='./tmp/caselist'
-  local case_tmp='./tmp/case_tmp'
-  local table='./tmp/table'
-  local modlist='./tmp/modlist'
-  if [ "$BBI_IGNORE_HOST" != '1' ] ; then
-    DEBUG "Generating lookup tables... "
-    
-    # Exclude blacklisted modules, if any
-    if [ -d /etc/modprobe.d/ ] ; then
-      cp -r /etc/modprobe.d ./etc/.
-      find ./etc/modprobe.d/ -type f -name '*.conf' -exec cat {} + | \
-      awk ' /^[ \t]*blacklist[ \t]/ {
-        gsub(/[-_]/,"[-_]");
-        printf("\\<%s$\n", $2);
-      }' > $blacklist
-      grep -v -f $blacklist $MODULES_SRC_DIR/modules.alias > $modalias
-    else
-      cp $MODULES_SRC_DIR/modules.alias $modalias
-    fi
-    
-    # Format each alias into a shell-style case expression
-    awk '
-    /^alias / {
-      sub(/^alias +/,"");
-      a=substr($0,1,length($0)-length($NF))
-      sub(/ $/,"",a)
-      sub(/[-_]/,"[-_]",a)
-      gsub(/ /,"\\ ",a)
-      gsub(/\(/,"\\(",a)
-      gsub(/\)/,"\\)",a)
-      printf("%s) echo %s ;;\n",a,$NF);
-    }
-    ' $modalias | sort -ur > $caselist
-    
-    # Separate case expressions into three tables for faster lookups
-    for sys in pci usb; do
-      echo "lookup_$sys () { case \"\$@\" in " > $table.$sys
-      grep "^$sys:" $caselist >> $table.$sys
-      echo '*) echo $1 ;; esac; }' >> $table.$sys
-      . $table.$sys
-      grep -v "^$sys:" $caselist > $case_tmp
-      mv $case_tmp $caselist
-    done
-    
-    # Anything that's not pci or usb goes into "etc" table
-    echo 'lookup_etc () { case "$@" in ' > $table.etc
-    cat $caselist >> $table.etc
-    echo '*) echo $1 ;; esac; }' >> $table.etc
-    . $table.etc
-    
-    DEBUG "    done.\n"
-    
-    DEBUG "Scanning /sys for modules... "
-    
-    # Rummage through the /sys/ directory for module aliases and resolve
-    # the actual module filenames, along with any dependencies
-    find /sys/ -name modalias -exec cat {} + | sort -u | \
-    while read Alias; do
-      resolve_alias "$Alias"
-    done | sort -u | while read Module; do
-      get_deps "$Module"
-    done > $modlist
-    DEBUG "    done.\n"
-  else
-   cp $MODULES_SRC_DIR/modules.alias $modalias
-   > $modlist
-   touch ./etc/autoscan
-  fi
-  DEBUG "Adding user-specified modules... "
-  # Resolve filenames and dependencies for any user-specified modules
-  for Module in $BBI_EXTRA_MODULES; do
-    get_deps "$Module"
-  done >> $modlist
-  DEBUG "    done.\n"
-  # Send the results to stdout, the caller will deal with it from there
-  sort -u $modlist | sed 's#^#'"$KVER/"'#'
+  ModList=$(base_modules)
+  get_deps
+  INFO 'Resolving module filenames...'
+  local PfxLen=${#BBI_MODULES_PATH}
+  PfxLen=$((PfxLen+2))
+  for M in $ModList; do
+    get_modfile $M
+  done | sort -u | cut -c $PfxLen-
+  INFO ' done.\n'
 }
 
 
-exclude_module_dir () {
-  local module_dir
-  for module_dir in $BBI_EXCLUDE_MDIRS ; do
-    echo "$1" | grep -q "/$module_dir/" && return 0
-  done
-  return 1
-}
+setup_env () {
+  [ "x$BBI_MKRAMFS_CONF"  =  'x' ] && \
+    BBI_MKRAMFS_CONF='/etc/bb.d/conf/mkramfs.conf'
 
+  # We want current environment variables to take precedence over
+  # config file, so save current env to file, load config, re-load saved env.
+  if [ -f "$BBI_MKRAMFS_CONF" ] && [ -r "$BBI_MKRAMFS_CONF" ] ; then
+    local ENV_TMP=$(mktemp /tmp/bbinit_env.XXXXXX)
+    set > "$ENV_TMP"
+    . "$BBI_MKRAMFS_CONF"
+    . "$ENV_TMP"
+    rm -f "$ENV_TMP"
+  fi
 
-get_host_busybox () {
-  if [ "x$BBI_HOST_BUSYBOX" = 'x' ] ; then
-    BBI_HOST_BUSYBOX=$(type -p busybox.static) || \
-    BBI_HOST_BUSYBOX=$(type -p busybox) 
-  fi
-  if [ "$BBI_HOST_BUSYBOX" = 'busybox' ] ; then
-    BBI_HOST_BUSYBOX=$(which busybox.static) || \
-    BBI_HOST_BUSYBOX=$(which busybox) 
-  fi
-  if [ -f "$BBI_HOST_BUSYBOX" ] && [ -x "$BBI_HOST_BUSYBOX" ] ; then
-    :
-  else
-    WARN "$0 Cannot find prefered busybox executable, falling back to /lib/bb/busybox"
-    BBI_HOST_BUSYBOX='/lib/bb/busybox'
-  fi
+  [ "x$BBI_EXCLUDE_MDIRS" = 'x' ] || \
+    WARN 'BBI_EXCLUDE_MDIRS is deprecated and should not be set.'
+
+  # Fallbacks in case these still aren't set
+  : ${BBI_COMPRESSOR:=gzip}
+  : ${BBI_EXTRA_MODULES:=ext2 ext3 ext4}
+  : ${BBI_IGNORE_HOST:=0}
+  : ${BBI_MODULES_PATH:=/lib/modules}
+  : ${BBI_RAMFS_BUSYBOX:=/lib/bb/busybox}
+  : ${BBI_RAMFS_INIT:=$(dirname $(readlink -f $0))/init}
+  : ${BBI_RAMFS_NAME:=ramfs}
+  : ${BBI_EXTRA_FILES_ROOT:=/}
+  : ${BBI_GZIP_MODULES:=0}
+  : ${BBI_KEEP_TMPFILES:=0}
+
+  OneOrZero BBI_IGNORE_HOST
+  OneOrZero BBI_GZIP_MODULES
+  OneOrZero BBI_KEEP_TMPFILES
 }
 
 
@@ -255,9 +274,9 @@ fix_module_compression () {
   fi
 }
 
+
 copy_module () {
   local SRC="$1"
-  exclude_module_dir $SRC && return
   [ -e ./lib/modules/$SRC ] && return
   if [ -e "$BBI_MODULES_PATH/$SRC" ] ; then
     install -m 644 -D $BBI_MODULES_PATH/$SRC ./lib/modules/$SRC
@@ -269,65 +288,40 @@ copy_module () {
 
 main () {
 
-  get_host_busybox
-
-  [ "x$BBI_MKRAMFS_CONF"  =  'x' ] && \
-    BBI_MKRAMFS_CONF='/etc/bb.d/conf/mkramfs.conf'
-
-  # We want current environment variables to take precedence over
-  # config file, so save current env to file, load config, re-load saved env.
-  if [ -f "$BBI_MKRAMFS_CONF" ] && [ -r "$BBI_MKRAMFS_CONF" ] ; then
-    local ENV_TMP=$(mktemp /tmp/bbinit_env.XXXXXX)
-    set > "$ENV_TMP"
-    . "$BBI_MKRAMFS_CONF"
-    . "$ENV_TMP"
-    rm -f "$ENV_TMP"
-  fi
-
-  # Fallbacks in case these still aren't set
-  : ${BBI_COMPRESSOR:=gzip}
-  : ${BBI_EXCLUDE_MDIRS:=cpufreq gpu hotplug kvm sound watchdog}
-  : ${BBI_EXTRA_MODULES:=ext2 ext3 ext4}
-  : ${BBI_IGNORE_HOST:=0}
-  : ${BBI_MODULES_PATH:=/lib/modules}
-  : ${BBI_RAMFS_BUSYBOX:=/lib/bb/busybox}
-  : ${BBI_RAMFS_INIT:=$(dirname $(readlink -f $0))/init}
-  : ${BBI_RAMFS_NAME:=ramfs}
-  : ${BBI_EXTRA_FILES_ROOT:=/}
-  : ${BBI_GZIP_MODULES:=0}
-
+  setup_env
   local TOPDIR=$(mktemp -td initramfs.XXXXXX)
 
-  [ -z "$KVER" ] && KVER=$(uname -r)
+  [ "x$KVER" = 'x' ] && KVER=$(uname -r)
 
   MODULES_SRC_DIR="$BBI_MODULES_PATH/$KVER"
   MODULES_TRG_DIR="./lib/modules/$KVER"
+  ModAlias=$MODULES_SRC_DIR/modules.alias
 
   case "$BBI_RAMFS_NAME" in 
     */*) ;;
     *) BBI_RAMFS_NAME="/boot/$BBI_RAMFS_NAME" ;;
   esac
+
   cd $TOPDIR || exit
   mkdir bin dev etc lib proc sys tmp usr usr/bin usr/sbin var
   cp $BBI_RAMFS_BUSYBOX bin/busybox
   chmod 755 bin/busybox
   cp $BBI_RAMFS_INIT ./init
   chmod 755 ./init
-  for SRC in $(list_modules) ; do copy_module "$SRC" ; done
-  if [ "$BBI_IGNORE_HOST" != '1' ] ; then
+
+  gen_lookups
+  local ModFiles=$(list_modules)
+  INFO 'Copying modules... '
+  for SRC in $ModFiles; do copy_module "$SRC" ; done
+  INFO 'done.\n'
+  if [ "$BBI_IGNORE_HOST" = 0 ] ; then
     find "$MODULES_TRG_DIR/kernel/" -name '*.ko*'  | sort | \
     while read KO ; do
       KO=${KO##*/}
       echo ${KO%.ko*}
     done > etc/modules
-    DEBUG "Resolving soft dependencies...     "
-    resolve_softdeps etc/modules
-    while read Module ; do
-      get_deps "$Module"
-    done < etc/modules | sed 's#^#'"$KVER/"'#' | while read SRC ; do
-      copy_module "$SRC"
-    done
-    DEBUG "done.\n"
+  else
+    touch ./etc/autoscan
   fi
   fix_module_compression
   if [ -e missing ] ; then
@@ -377,17 +371,21 @@ EOF
 
   [ -f "$BBI_FIXUP" ] && [ -x "$BBI_FIXUP" ] && $BBI_FIXUP
 
-  DEBUG "Creating \"$BBI_RAMFS_NAME\"; $BBI_COMPRESSOR format... "
-  find . | grep -v '\./tmp/..*' | cpio -H newc -o | \
-    $BBI_COMPRESSOR > $BBI_RAMFS_NAME
-  DEBUG "done.\n"
-  DEBUG $(
-    printf 'Created "%s" (%s entries, %sMB)\n' \
-    $BBI_RAMFS_NAME \
-    $(find . | grep -v '\./tmp/..*' | wc -l) \
-    $(stat -c %s $BBI_RAMFS_NAME | \
-    awk '{printf("%0.2f\n", $1/(1024*1024))}')
-  )'\n'
+  if > "$BBI_RAMFS_NAME" ; then
+    INFO "Creating \"$BBI_RAMFS_NAME\"; $BBI_COMPRESSOR format... "
+    find . | grep -v '\./tmp/..*' | cpio -H newc -o | \
+      $BBI_COMPRESSOR > "$BBI_RAMFS_NAME"
+    INFO "done.\n"
+    INFO $(
+      printf 'Created "%s" (%s entries, %sMB)\n' \
+      $BBI_RAMFS_NAME \
+      $(find . | grep -v '\./tmp/..*' | wc -l) \
+      $(stat -c %s $BBI_RAMFS_NAME | \
+      awk '{printf("%0.2f\n", $1/(1024*1024))}')
+    )'\n'
+  else
+    ERROR "Failed to create $BBI_RAMFS_NAME"
+  fi
   [ "$BBI_KEEP_TMPFILES" = '1' ] || rm -r $TOPDIR
 }
 

@@ -1,0 +1,199 @@
+#!/lib/bb/sh
+
+########################################################################
+# Script to search the /sys/devices/ directory for "modalias" files.
+# If it finds any it will attempt to resolve the alias and load
+# the corresponding module, unless it is blacklisted in
+# /etc/modprobe.{conf,d} . If you want this script to run at boot-up,
+# you can create the following symbolic link:
+#
+#   mkdir -p /etc/bb.d/conf/tasks
+#   ln -s /etc/bb.d/exec/sysfs_mods /etc/bb.d/conf/tasks/modules.post_start
+#
+# This will probably increase your boot-up time by around 2 to 4 seconds,
+# possibly loading some modules that aren't needed, and might even cause 
+# some undesirable side effects. On the other hand it can sometimes ease
+# the pain of managing new hardware.
+#
+# The script accepts some command line options, see the _usage() function
+# below for details, or run with -h for help.
+#
+# In some cases, inserting a module will cause new devices to appear,
+# so the script will re-scan the /sys/ directory a few times until 
+# no new modalias files are found. This may result in more than one line
+# of -v output. (This obviously will not happen when running in "-n" mode.)
+########################################################################
+
+
+_usage () {
+cat << EOF >&2
+
+Searches the /sys/devices/ directory for "modalias" files, resolves
+the alias to a module name, and (optionally) loads the module.
+The following options are supported:
+
+  -n        Print the module names to stdout, rather than loading them.
+            (This is the default behavior when running as a non-root user.)
+
+  -v        Print the names of the modules being loaded.
+
+  -k <VER>  Assume kernel version is <VER>; defaults to \`uname -r\`
+            (Use with care: Module names etc. can vary between kernels!)
+
+  -a        Show all modules found in /sys/devices
+            (Includes loaded and blacklisted modules; implies -n)
+
+  -h        Print this help and exit.
+
+EOF
+}
+
+
+# The "modules.alias" file is just a long list of shell-style wildcard patterns
+# and their respective module names. We can use a case/esac block from ash
+# (or dash or bash) to test for a match, but scanning through 30,000+ patterns 
+# each time can be painfully slow. We can speed things up considerably by keying
+#  on the first character of the alias, and use a separate case block for each
+#  one, wrapping it in its own function named lookup_X, where X is the initial
+# character of the alias we are searching for.
+
+_create_lookup_tables () {
+  local ModAliasTmp=$TempDir/ModAliasTmp
+  sort "$ModAlias" > "$ModAliasTmp"
+  local footer='esac; printf "%s\n" "$M"; }'
+  LookUp=$TempDir/LookUp
+  C=''
+  while read X A M ; do
+    [ "$X" = 'alias' ] || continue
+    I=${A:0:1}
+    if [ "$I" != "$C" ]; then
+      [ "$C" ] && echo $footer
+      LookupFuncs="$LookupFuncs _lookup_$I"
+      echo "_lookup_$I" '() { local M; case "$1" in'
+      C="$I"
+    fi
+    case "$A" in
+      *"("*)
+        A=${A//(/\"(\"}
+        A=${A//)/\")\"}
+      ;;
+    esac
+    echo "$A) M='${M//-/_}' ;;"
+  done < "$ModAliasTmp" > "$LookUp"
+  echo $footer >> "$LookUp"
+  rm -f "$ModAliasTmp"
+  . "$LookUp"
+  rm -f "$LookUp"
+}
+
+
+_get_sysfs_mods () {
+  local Alias
+  for Alias in $(
+    find /sys/devices/ -type f -name modalias \
+      -exec cat {} + 2> /dev/null | sort -u
+  ) ; do
+    _lookup_${Alias:0:1} "$Alias"
+  done | sort -u
+}
+
+
+_list_pending_mods () {
+  local SysFsMods=$(_get_sysfs_mods)
+  local ProcFsMods=
+  local AvailableMods=
+  local ModName Else
+  while read ModName Else; do
+    ProcFsMods="$ProcFsMods ${ModName//-/_}"
+  done < /proc/modules
+  for SysFsMod in $SysFsMods; do
+    local GotIt=0
+    local SkipIt=0
+    if [ $ShowAll = 0 ]; then
+      for ProcFsMod in $ProcFsMods; do
+        [ "$SysFsMod" = "$ProcFsMod" ] && GotIt=1 && break
+      done
+      for Excluded in $BlackList; do
+        [ "$SysFsMod" = "$Excluded" ] && SkipIt=1 && break
+      done
+    fi
+    [ $GotIt = 0 ] && [ $SkipIt = 0 ] && AvailableMods="$AvailableMods $SysFsMod"
+  done
+  echo $AvailableMods
+}
+
+
+_build_blacklist () {
+  local Key Val Else ModName BlackList
+  for Conf in \
+   /lib/modprobe.d/*.conf \
+    /usr/local/lib/modprobe.d/*.conf \
+     /run/modprobe.d/*.conf \
+      /etc/modprobe.d/*.conf
+  do
+    [ -f "$Conf" ] || continue
+    while read Key Val Else; do
+    [ "$Key" = 'blacklist' ] || continue
+    ModName=$(_lookup_${Val:0:1} "$Val")
+    [ "x$ModName" = 'x' ] && ModName=$Val
+    BlackList="$BlackList ${ModName//-/_}"
+    done < $Conf
+  done
+  echo "$BlackList"
+}
+ 
+
+_load_sysfs_mods () {
+  local UID=$(id -u)
+  local KVER=$(uname -r)
+  local NoOp=0
+  local ShowCmd=0
+  local ShowAll=0
+  [ "$UID" = 0 ] || NoOp=1
+  while getopts avnk:h OPT ; do
+    case ${OPT} in
+      a) ShowAll=1;;
+      v) ShowCmd=1;;
+      n) NoOp=1;;
+      h) _usage; return 0;;
+      k) KVER="${OPTARG%/}/";;
+      ?) _usage; return 1;;
+    esac
+  done
+  [ $NoOp = 1 ] && ShowCmd=1
+  local ModAlias=/lib/modules/$KVER/modules.alias
+  if ! [ -f "$ModAlias" ] ; then
+    echo "Error: Cannot find '$ModAlias'"
+    return 1
+  fi
+  [ -w /dev ] && TempDir=/dev || TempDir=/tmp # /dev > /tmp for early boot
+  local Template=$(printf 'SysFsModAlias-%x%xXXXXXX' $RANDOM $$)
+  TempDir=$(mktemp -d -p $TempDir $Template) || return 1
+  local LookupFuncs
+  _create_lookup_tables
+  local Pending=
+  local Len=${#Pending}
+  local BlackList=$(_build_blacklist)
+  local Loops=0  # Loading a module might cause more devices to appear
+  while [ $Loops -lt 16 ] ; do
+    Len=${#Pending}
+    Pending=$(_list_pending_mods)
+    [ $Len = ${#Pending} ] && break # Nothing more to add
+    if [ $ShowAll = 1 ]; then
+      echo $Pending
+      break
+    else
+      [ $ShowCmd = 1 ] && echo $Pending
+      [ $NoOp = 1 ] && break
+      modprobe -ab $Pending
+      sleep .1
+    fi
+    Loops=$((Loops+1))
+  done
+  rmdir $TempDir
+  unset -f _create_lookup_tables _get_sysfs_mods _list_pending_mods \
+    _load_sysfs_mods _build_blacklist $LookupFuncs
+}
+
+_load_sysfs_mods $@
+

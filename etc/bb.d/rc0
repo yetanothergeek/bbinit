@@ -49,12 +49,16 @@ get_pid_list () {
 stop_tasks () {
   local reversed=''
   for include_file in /etc/bb.d/task/* ; do
-    reversed="$include_file $reversed"
+    [ -f $include_file ] && reversed="$include_file $reversed"
   done
   task_stop () { : ; }
   for include_file in $reversed ; do
+    local base_name=/etc/bb.d/task/local/${include_file#*-}
+    [ -f $base_name.pre_stop ] && . $base_name.pre_stop
+    [ -f $base_name.mask_stop ] && include_file=$base_name.mask_stop
     [ -f $include_file ] && . $include_file && task_stop
     task_stop () { : ; }
+    [ -f $base_name.post_stop ] && . $base_name.post_stop
   done
 }
 

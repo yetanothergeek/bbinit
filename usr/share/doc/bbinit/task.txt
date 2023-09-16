@@ -1,0 +1,51 @@
+/etc/bb.d/task/:
+This directory contains the scripts needed to bring up the system at boot time,
+and to bring the system down cleanly for a shutdown or reboot. The scripts are
+sourced by /etc/bb.d/rcS in natural sort order at startup, and in reverse order
+by /etc/bb.d/rcO on shutdown. Each script should contain a function called 
+task_start() that is run at startup, and a function called task_stop() that
+is run at shutdown.
+
+You can modify the behavior of these tasks as described below.
+
+/etc/bb.d/task/local/:
+This optional directory may exist to provide user-defined customizations and/or
+enhancements to the default tasks. This directory can contain six types of
+scripts: pre_start, mask_start, post_start, pre_stop, mask_stop, post_stop.
+
+The contents of a "pre" script will be executed just BEFORE its respective task.
+The contents of a "post" script will be executed just AFTER its respective task.
+The contents in a "mask" script will completely REPLACE the respective task.
+
+The contents of a "start" script will be executed at boot-up.
+The contents of a "stop" script will be executed at shutdown.
+
+The scripts are named according to the task they modify. For example, if you 
+wanted to run a script at boot-up, just after "/etc/bb.d/task/050-fstab" is
+executed, your script should be named "/etc/bb.d/task/local/fstab.post_start"
+
+Likewise, a script named "/etc/bb.d/task/local/alsa.pre_stop" would run at 
+shutdown just before the "/etc/bb.d/task/130-alsa" task.
+
+And a script named "/etc/bb.d/task/local/syslog.mask_start" would completely
+replace the boot-up code in "/etc/bb.d/task/080-syslog". An empty *mask* file
+will insure that the default task does nothing. (If the respective *pre* and/or
+*post* script[s] exist, they will still behave as described above.)
+
+
+
+              vvvvv !!!!!!! VERY IMPORTANT !!!!!!! vvvvv
+
+These files are NOT run as standalone scripts! Rather, they are SOURCED directly
+into the main init and shutdown scripts! This means any code in these scripts
+will have a direct, global impact on the boot-up (or shutdown) process as a
+whole. In particular, calling the "exit" command from your script will cause
+the entire boot-up or shutdown process to terminate. Similarly, you should not 
+use "set -x" or any other code that would cause the script to exit. Any syntax
+errors can cause the entire boot process to fail as well. If your script creates
+any global variables or functions, they should be prefixed with an underscore
+(e.g. _myvar or _myfunc) to minimize conflicts with other globals. 
+
+A safer approach is to create two files: the one that is sourced by the init
+system; and a second "standalone" script that is executed by the sourced file.
+

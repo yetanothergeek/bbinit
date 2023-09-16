@@ -13,8 +13,13 @@ local include_file
 
 task_start () { : ; }
 for include_file in /etc/bb.d/task/* ; do
+  [ -f $include_file ] || continue
+  local base_name=/etc/bb.d/task/local/${include_file#*-}
+  [ -f $base_name.pre_start ] && . $base_name.pre_start
+  [ -f $base_name.mask_start ] && include_file=$base_name.mask_start
   [ -f $include_file ] && . $include_file && task_start
   task_start () { : ; }
+  [ -f $base_name.post_start ] && . $base_name.post_start
 done
 
 printf 'Leaving %s\r' "$0" 1>&2

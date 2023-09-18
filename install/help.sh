@@ -36,10 +36,17 @@ else
     *) Die "Root path must be absolute." ;;
   esac
   RootDir=$(echo "$2" | sed -e 's#/\+#/#g' -e 's#/$##') # No // or final /
+  [ -d "$RootDir" ] || Die "Invalid target directory: $RootDir"
 fi
 
+ConflictsDir="$RootDir$EtcBbD/CONFLICTS"
 
-[ -d $RootDir ] || Die "Invalid target directory: $RootDir"
+[ -d "$ConflictsDir" ] && Die "
+Directory '$ConflictsDir' already exists.
+This usually indicates conflicts from a previous update that were
+never resolved. Please merge or remove these files and try again. 
+"
+
 
 [ "$1" = '-n' ] || \
   [ -w "$RootDir" ] || \

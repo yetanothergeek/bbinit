@@ -1,0 +1,62 @@
+#!/lib/bb/sh
+
+TopDir='/sys/fs/cgroup'
+MntOpts='nodev,noexec,nosuid'
+MntCmd='mount'
+
+HaveCgrp1=false
+HaveCgrp2=false
+
+CgVerCk() {
+  while read nodev fs ; do
+    [ "$nodev" = 'nodev' ] || continue
+    case "$fs" in 
+      cgroup)  HaveCgrp1=true ;;
+      cgroup2) HaveCgrp2=true ;;
+    esac
+  done < /proc/filesystems
+}
+
+
+MntCg1() {
+  $HaveCgrp1 || return
+  mountpoint -q "$TopDir" ||
+    $MntCmd -t tmpfs -o "$MntOpts,mode=755,size=10m" cgroup_root $TopDir
+  mountpoint -q "$RcDir" && return
+  local RcName='openrc'
+  local RcDir="$TopDir/$RcName"
+  local RelAgnt="/root/bin/cgrp-done"
+  mkdir -p "$RcDir"
+  $MntCmd -t cgroup -o "none,$MntOpts,name=$RcName,release_agent=$RelAgnt" $RcName "$RcDir"
+  printf 1 > "$RcDir/notify_on_release"
+}
+
+
+MntCg2() {
+  $HaveCgrp2 || return
+  local base="$TopDir/unified"
+  local name='unified'
+  local MaybeOpts="$MntOpts,nsdelegate"
+  mkdir -p "$base"
+  mountpoint -q "$base" ||
+    $MntCmd -t cgroup2 -o "$MaybeOpts" "$name" "$base" 2> /dev/null ||
+      $MntCmd -t cgroup2 -o "$MntOpts" "$name" "$base"
+}
+
+
+MntCg1Sub() {
+  $HaveCgrp1 && [ -e /proc/cgroups ] || return
+  local name hier num enabled junk
+  while read -r name hier num enabled junk; do
+    [ "$enabled" = 1 ] || continue
+    mountpoint -q "$TopDir/$name" && continue
+    mkdir -p "$TopDir/$name"
+    $MntCmd -t cgroup -o "$MntOpts,$name" "$name" "$TopDir/$name"
+  done < /proc/cgroups
+}
+
+CgVerCk
+MntCg1
+MntCg2
+MntCg1Sub
+

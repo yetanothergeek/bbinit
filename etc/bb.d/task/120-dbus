@@ -1,27 +1,50 @@
 #!/bin/false
 # -*- mode: sh; -*-
 
-# Start dbus daemon
-task_start () {
-# Set to non-zero to have a unique machine-id on each reboot
-local MakeNewMachID=0
 
-if type -p dbus-daemon &> /dev/null ; then
-  if type -p dbus-uuidgen &> /dev/null ; then
-    rm -f /run/dbus/pid /var/lib/dbus/machine-id
-    if [ "$MakeNewMachID" != '0' ] ; then
-      dbus-uuidgen > /etc/machine-id
-    else
-      dbus-uuidgen --ensure=/etc/machine-id
-    fi
-  fi
-  local DBusDaemon=$(type -p dbus-daemon)
-  # Causes problems if daemon links to libsystemd and systemd isn't running.
-  if ! grep -Eq 'libsystemd|libelogind' "$DBusDaemon"; then
-    echo 'Starting dbus daemon...'
-    mkdir -p /run/dbus
-    dbus-daemon --system
-  fi
+# At first glance, it might seem that launching dbus-daemon and elogind
+# should be two separate tasks, but it's not that simple. See the section
+# on dbus and elogind in /usr/share/doc/bbinit/task.txt for more info.
+
+# Start dbus daemon, mount cgroups and start elogind
+task_start () {
+local DBusDaemon=$(type -p dbus-daemon) || return 0
+if type -p dbus-uuidgen &> /dev/null ; then
+  local BBI_PERSIST_MACH_ID=1
+  local DBusConf='/etc/bb.d/conf/dbus.conf'
+  [ -f "$DBusConf" ] && . "$DBusConf"
+  rm -f /run/dbus/pid /var/lib/dbus/machine-id
+  case "$BBI_PERSIST_MACH_ID" in 
+    0) dbus-uuidgen > /etc/machine-id ;;
+    *) dbus-uuidgen --ensure=/etc/machine-id ;;
+  esac
 fi
+
+local logind=''
+local libexec
+for libexec in 'lib' 'libexec' ; do
+  logind="/usr/$libexec/elogind/elogind"
+  if [ -f "$logind" ] && [ -x "$logind" ] ; then
+    break
+  else 
+    logind=''
+  fi
+done
+# Causes problems if daemon links to libsystemd and systemd isn't running.
+# Causes problems if daemon links to libelogind and elogind isn't installed.
+if grep -Eq 'libsystemd|libelogind' "$DBusDaemon" && [ -z "$logind" ]; then
+  echo 'Not starting dbus daemon; [e]logind needed but not found.'
+  return 0
+fi
+echo 'Starting dbus daemon...'
+mkdir -p /run/dbus
+dbus-daemon --system
+[ "$logind" ] || return 0
+touch /run/utmp
+echo "Enabling cgroups support..."
+/etc/bb.d/exec/cgroups
+echo "Starting login daemon..."
+"$logind" &
 }
+
 

@@ -33,7 +33,6 @@ will insure that the default task does nothing. (If the respective *pre* and/or
 *post* script[s] exist, they will still behave as described above.)
 
 
-
               vvvvv !!!!!!! VERY IMPORTANT !!!!!!! vvvvv
 
 These files are NOT run as standalone scripts! Rather, they are SOURCED directly
@@ -48,4 +47,29 @@ any global variables or functions, they should be prefixed with an underscore
 
 A safer approach is to create two files: the one that is sourced by the init
 system; and a second "standalone" script that is executed by the sourced file.
+
+================================================================================
+
+TL;DR: What follows is mostly a rant about the complexity of logind/elogind
+as it relates to dbus initialization, probably not something most folks would
+be interested in.
+
+At first glance, it might seem that launching dbus-daemon and elogind
+should be two separate tasks, but it's not that simple:
+
+So long as dbus-daemon is NOT linked to the libelogind library, then
+dbus-daemon can be started and logins will work just fine, BUT...
+
+If dbus-daemon links to libelogind and elogind is installed, then 
+logging in requires elogind to be started. If dbus-daemon links
+to libelogind and elogind is NOT installed, then dbus-daemon must
+NOT be started, otherwise login attempts will hang!
+
+This is further complicated by the fact that dbus-daemon needs to
+be started BEFORE elogind, and cgroups must also be mounted before
+elogind can run successfully. Mounting cgroups is a rather complex
+procedure in itself, so it is handled by a separate script.
+
+Note that when I mention "elogind" above, these same issues also 
+apply to systemd-logind and libsystemd.
 

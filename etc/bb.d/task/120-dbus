@@ -8,7 +8,8 @@
 
 # Start dbus daemon, mount cgroups and start elogind
 task_start () {
-local DBusDaemon=$(type -p dbus-daemon) || return 0
+local DBusDaemon
+DBusDaemon=$(type -p dbus-daemon) || return 0
 if type -p dbus-uuidgen &> /dev/null ; then
   local BBI_PERSIST_MACH_ID=1
   local DBusConf='/etc/bb.d/conf/dbus.conf'

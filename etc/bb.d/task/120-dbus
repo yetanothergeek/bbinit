@@ -44,8 +44,30 @@ dbus-daemon --system
 touch /run/utmp
 echo "Enabling cgroups support..."
 /etc/bb.d/exec/cgroups
+# In order for elogind's poweroff and reboot functions to work under bbinit,
+# the /bin/reboot and /bin/poweroff files should point to busybox. If they
+# already exist, but are owned by some other init system, we can bind-mount
+# on top of them. If they don't exist, we can create our own symlinks, but
+# if /bin/ is read-only, then there is nothing else we can do, and the
+# elogind shutdown commands will fail.
+local cmd
+local bb='/lib/bb/busybox'
+for cmd in /bin/reboot /bin/poweroff ; do
+  local err="WARNING: Failed to set up $cmd (logind needs it)"
+  if [ -e "$cmd" ] ; then
+    diff -q "$bb" "$cmd" > /dev/null && continue
+    if ! mount --bind "$bb" "$cmd" ; then
+      logger -s -t bbinit daemon.warn "$err"
+    fi
+  else
+    if ln -s "$bb" "$cmd" ; then
+      logger -s -t bbinit daemon.notice "Created symlink: $cmd"
+    else
+      logger -s -t bbinit daemon.warn "$err"
+    fi
+  fi
+done
 echo "Starting login daemon..."
 "$logind" &
 }
-
 

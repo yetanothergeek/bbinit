@@ -70,6 +70,16 @@ be started BEFORE elogind, and cgroups must also be mounted before
 elogind can run successfully. Mounting cgroups is a rather complex
 procedure in itself, so it is handled by a separate script.
 
+Also, elogind has hard-coded paths to /bin/reboot and /bin/poweroff.
+In order for elogind to successfully execute these commands under bbinit,
+those files must point to busybox. If the files exist, but are owned by
+some other init system, our only option is to bind-mount on top of them. 
+If they don't already exist, we can create our own symlinks, unless /bin/
+is read-only; in that case there's not much we can do besides give up.
+Shutdown and reboot will still work from busybox (as root or setuid) but
+your DE's fancy GUI logout dialog will probably fail if these links can't
+be properly set up.
+
 Note that when I mention "elogind" above, these same issues also 
 apply to systemd-logind and libsystemd.
 

@@ -8,7 +8,7 @@ local seedfile="$statedir/seedrng/seed.credit"
 local timeout=20 # Seconds to keep trying before backgrounding
 local elapsed=0
 local start=$EPOCHREALTIME
-# With an existing seefile and/or haveged running, intitialization
+# With an existing seedfile and/or haveged running, intitialization
 # happens almost instantly. Otherwise it might take a long time.
 if [ ! -e "$seedfile" ] && ! pidof haveged > /dev/null ; then
   printf '%s\n%s\n' \

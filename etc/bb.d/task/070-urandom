@@ -1,35 +1,59 @@
 #!/bin/false
 # -*- mode: sh; -*-
 
-# Initialize random number generator (seed /dev/urandom)
+# Initialize random number generator (seed /dev/(u)random)
 task_start () {
-echo 'Initializing random number generator...'
-local RANDOM_SEED='/var/lib/random-seed'
-if [ -f "$RANDOM_SEED" ]; then
-  cat "$RANDOM_SEED" > /dev/urandom
-else
-  mkdir -p "${RANDOM_SEED%/*}"
-  touch "$RANDOM_SEED"
+local statedir='/var/lib'
+local seedfile="$statedir/seedrng/seed.credit"
+local timeout=20 # Seconds to keep trying before backgrounding
+local elapsed=0
+local start=$EPOCHREALTIME
+# With an existing seefile and/or haveged running, intitialization
+# happens almost instantly. Otherwise it might take a long time.
+if [ ! -e "$seedfile" ] && ! pidof haveged > /dev/null ; then
+  printf '%s\n%s\n' \
+  'NOTE: Entropy is low, RNG intitialization may be slow.' \
+  'Do some "monkey typing" on your keyboard to speed it up.'
 fi
-chmod 600 "$RANDOM_SEED"
-local POOLFILE=/proc/sys/kernel/random/poolsize
-local BYTES=4096
-[ -r "$POOLFILE" ] && BYTES=$(cat "$POOLFILE")
-
-( # Seed is saved on clean shutdown, but save now for unclean just in case. 
-  sleep 5 # Wait a bit for entropy
-  dd if=/dev/urandom of="$RANDOM_SEED" count=1 bs=$BYTES 2> /dev/null
-) &
+printf 'Initializing random number generator...'
+mkdir -p "$statedir"
+while : ; do
+  seedrng > /dev/null
+  if [ -e "$seedfile" ] ; then
+    elapsed=$(echo 2 k $EPOCHREALTIME $start - 1 / p | dc)
+    printf "\nRNG Successfully seeded after %s seconds.\n" "$elapsed"
+    break
+  fi
+  printf '.'
+  sleep 1
+  elapsed=$((elapsed+1))
+  if [ $elapsed -ge $timeout ] ; then
+    printf '\nTried for %s seconds to seed RNG, backgrounding.\n' $elapsed
+    (
+    while : ; do
+        seedrng > /dev/null
+        if [ -e "$seedfile" ] ; then
+          local logit='logger -t seedrng -p daemon.notice'
+          local line
+          seedrng | while read line ; do $logit "$line" ; done
+          $logit "Successfully seeded after $elapsed seconds."
+          break
+        fi
+        sleep 1
+        elapsed=$((elapsed+1))
+      done
+    ) &
+    break
+  fi
+done
+local oldfile='/var/lib/random-seed'  # Previous version used this
+[ -e "$oldfile" ] && rm -f "$oldfile" # we don't need it anymore.
 }
 
 
 task_stop () {
 echo "Saving random seed..."
-local random_seed=/var/lib/random-seed
-touch "$random_seed"
-chmod 600 "$random_seed"
-local poolfile=/proc/sys/kernel/random/poolsize
-[ -r "$poolfile" ] && bytes=$(cat "$poolfile") || bytes=4096
-dd if=/dev/urandom of="$random_seed" count=1 bs=$bytes 2> /dev/null
+mkdir -p '/var/lib/'
+seedrng
 }
 

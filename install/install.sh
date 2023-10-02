@@ -59,7 +59,7 @@ MoveToConflicts () {
 ReplaceFile () {
   [ -f "./$1" ] || return
   Identical "./$1" "$RootDir/$1" && return
-  MoveToConflicts "$1" 'old'
+  [ "$2" = 'overwrite' ] || MoveToConflicts "$1" 'old'
   local TrgDir=$(dirname "$1")
   $OP mkdir -p "$RootDir/$TrgDir"
   $OP cp -a $Ask "./$1" "$RootDir/$1"
@@ -79,7 +79,7 @@ if [ -e "$RootDir$EtcBbD" ] ; then # Assume we are updating existing installatio
       if echo "$Sum  $RootDir$File" | md5sum -c - &> /dev/null ; then
         # If file hasn't been modified since installed, mark it for deletion
         if [ -e "./$File" ] ; then
-          ReplaceFile "$File"
+          ReplaceFile "$File" 'overwrite'
         else
           DisableFile "$File"
         fi

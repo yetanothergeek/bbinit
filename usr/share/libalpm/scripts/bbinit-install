@@ -22,13 +22,15 @@ while read -r line; do
     install -Dm644 "/${line}" "/boot/vmlinuz-${kbase}"
   fi
   ID=
-  if [ -f /etc/os-release ] ; then
+  for osrel in /usr/lib/os-release /etc/os-release ; do
+    [ -f "$osrel" ] || continue
     while read key; do
       case "$key" in
         ID=*) eval "$key" && [ "$ID" ] && break || : ;;
       esac
-    done < /etc/os-release
-  fi
+    done < "$osrel"
+    break
+  done
   [ "$ID" ] || ID=arch
 
   ramfs="$ID-$kbase.bbi"

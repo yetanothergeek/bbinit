@@ -79,6 +79,7 @@ get_modfile () {
 Keepers='\
 input/keyboard
 input/serio
+hid/usbhid
 usb
 scsi
 ata

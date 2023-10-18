@@ -8,6 +8,22 @@ echo 'Configuring network interfaces...'
 ifconfig lo 127.0.0.1 up netmask 255.0.0.0
 [ -f /etc/mactab ] && nameif -c /etc/mactab
 if [ -f /etc/network/interfaces ] ; then
+  local key val junk # Try to load missing devices before we "ifup"
+  while read key val junk ; do 
+    [ "$key" = auto ] || continue 
+    [ -e "/sys/class/net/$val" ] && continue
+    logger -s -t IFUP -p warning "Missing auto iface '$val', trying harder"
+    local file line
+    for file in $(find /sys/devices -type f -name class) ; do
+      read line < $file && [ "${line:0:6}" = 0x0200 ] || continue
+      file=${file%/*}/modalias;
+      [ -f "$file" ] && read line < $file || continue
+      modprobe -b "$line"
+    done
+    sleep 0.5
+    [ -f /etc/mactab ] && nameif -c /etc/mactab
+    break 
+  done < /etc/network/interfaces 
   IfUp () { SHELL=/lib/bb/sh ifup $@ ; } # Need busybox SHELL for run-parts
   if grep -qw dhcp /etc/network/interfaces ; then
     if IfUp -anm | grep -q '^udhcpc ' ; then

@@ -239,7 +239,7 @@ setup_env () {
 
   # Fallbacks in case these still aren't set
   : ${BBI_COMPRESSOR:=gzip}
-  : ${BBI_EXTRA_MODULES:=ext2 ext3 ext4}
+  : ${BBI_EXTRA_MODULES:=ext2 ext3 ext4 hid_generic}
   : ${BBI_IGNORE_HOST:=0}
   : ${BBI_MODULES_PATH:=/lib/modules}
   : ${BBI_RAMFS_BUSYBOX:=/lib/bb/busybox}

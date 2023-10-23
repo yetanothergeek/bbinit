@@ -46,11 +46,9 @@ else
     else
       echo "Notice: fsck returned [$rv], requires reboot."
     fi
-    umount -a -r
-    mount -n -o remount,ro /
     echo 'Rebooting system.'
     sleep 5
-    reboot -f
+    exec reboot -f
   fi 
   echo 'Remounting root fs read/write.'
   mount -w -v -n -o remount /

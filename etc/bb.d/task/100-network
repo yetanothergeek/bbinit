@@ -22,7 +22,6 @@ if [ -f /etc/network/interfaces ] ; then
     done
     sleep 0.5
     [ -f /etc/mactab ] && nameif -c /etc/mactab
-    break 
   done < /etc/network/interfaces 
   IfUp () { SHELL=/lib/bb/sh ifup $@ ; } # Need busybox SHELL for run-parts
   if grep -qw dhcp /etc/network/interfaces ; then

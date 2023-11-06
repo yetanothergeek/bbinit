@@ -22,9 +22,9 @@ MntCg1() {
   $HaveCgrp1 || return
   mountpoint -q "$TopDir" ||
     $MntCmd -t tmpfs -o "$MntOpts,mode=755,size=10m" cgroup_root $TopDir
-  mountpoint -q "$RcDir" && return
   local RcName='openrc'
   local RcDir="$TopDir/$RcName"
+  mountpoint -q "$RcDir" && return
   local RelAgnt=$(readlink -f "$0")
   mkdir -p "$RcDir"
   $MntCmd -t cgroup -o "none,$MntOpts,name=$RcName,release_agent=$RelAgnt" $RcName "$RcDir"

@@ -25,7 +25,7 @@ MntCg1() {
   mountpoint -q "$RcDir" && return
   local RcName='openrc'
   local RcDir="$TopDir/$RcName"
-  local RelAgnt="/root/bin/cgrp-done"
+  local RelAgnt=$(readlink -f "$0")
   mkdir -p "$RcDir"
   $MntCmd -t cgroup -o "none,$MntOpts,name=$RcName,release_agent=$RelAgnt" $RcName "$RcDir"
   printf 1 > "$RcDir/notify_on_release"
@@ -55,8 +55,13 @@ MntCg1Sub() {
   done < /proc/cgroups
 }
 
-CgVerCk
-MntCg1
-MntCg2
-MntCg1Sub
+if [ $# -gt 0 ] ; then
+  Dir="/sys/fs/cgroup/openrc/$1"
+  [ -d "$Dir" ] && rmdir "$Dir"
+else
+  CgVerCk
+  MntCg1
+  MntCg2
+  MntCg1Sub
+fi
 

@@ -18,11 +18,11 @@ ResolveAlias () {
 
 Error=1
 for M in $(ResolveAlias "$1") ; do
-  logger -s -t bbinit daemon.info "Loading module '$M'"
+  logger -s -t bbinit -p daemon.info "Loading module '$M'"
   modprobe -b "$M" 2> /dev/null && Error=0
 done
 [ $Error -eq 0 ] && exit 0  # Claim success if at least one loaded
 
-logger -s -t bbinit daemon.warn "Failed to load module '$1'"
+logger -s -t bbinit -p daemon.warn "Failed to load module '$1'"
 exit 1
 

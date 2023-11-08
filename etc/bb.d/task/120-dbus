@@ -57,13 +57,13 @@ for cmd in /bin/reboot /bin/poweroff ; do
   if [ -e "$cmd" ] ; then
     diff -q "$bb" "$cmd" > /dev/null && continue
     if ! mount --bind "$bb" "$cmd" ; then
-      logger -s -t bbinit daemon.warn "$err"
+      logger -s -t bbinit -p daemon.warn "$err"
     fi
   else
     if ln -s "$bb" "$cmd" ; then
-      logger -s -t bbinit daemon.notice "Created symlink: $cmd"
+      logger -s -t bbinit -p daemon.notice "Created symlink: $cmd"
     else
-      logger -s -t bbinit daemon.warn "$err"
+      logger -s -t bbinit -p daemon.warn "$err"
     fi
   fi
 done

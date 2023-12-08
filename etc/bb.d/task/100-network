@@ -1,6 +1,18 @@
 #!/bin/false
 # -*- mode: sh; -*-
 
+NetMod () { # preload softdeps (for realtek on kernel >= 5.3)
+  local m= d=
+  [ "$2" ] && m=$2 || \
+  for m in $(modprobe -D "$1"); do : ; done 2> /dev/null
+  [ "$m" ] && for d in $(modinfo -F softdep "$m"); do
+    [ "$d" = post: ] && break
+    [ "$d" = pre: ] && continue
+    modprobe -b "$d"
+  done
+  modprobe -b "$1"
+}
+
 # network
 task_start () {
 echo 'Configuring network interfaces...'
@@ -18,7 +30,7 @@ if [ -f /etc/network/interfaces ] ; then
       read line < $file && [ "${line:0:6}" = 0x0200 ] || continue
       file=${file%/*}/modalias;
       [ -f "$file" ] && read line < $file || continue
-      modprobe -b "$line"
+      NetMod "$line"
     done
     sleep 0.5
     [ -f /etc/mactab ] && nameif -c /etc/mactab
@@ -36,7 +48,7 @@ if [ -f /etc/network/interfaces ] ; then
         */kernel/drivers/net/usb/*)
           local modname=${modfile##*/}
           modname=${modname%%.*}
-          modprobe -b "$modname"
+          NetMod "$modname" "$modfile"
           sleep 0.5
         ;;
       esac
@@ -65,7 +77,7 @@ if [ -f /etc/network/interfaces ] ; then
       *) logger -s -t "${PROG/:/}" -p daemon.warn "$MSG" ;;
     esac
   done &
-  unset -f IfUp
 fi
+unset -f NetMod IfUp
 }
 

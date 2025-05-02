@@ -5,6 +5,7 @@ WARN  () { printf "*** Warning: %s\n" "$@" 1>&2; }
 ERROR () { printf "*** ERROR: %s\n" "$@" 1>&2; }
 FATAL () { ERROR "$@"; exit 1; }
 
+Start=$EPOCHREALTIME
 
 OneOrZero () {
  local V=$(eval echo $(echo "\$$1"))
@@ -14,54 +15,19 @@ OneOrZero () {
  esac
 }
 
-
-gen_lookups () {
-  if ! [ -f "$ModAlias" ]; then
-    WARN "Cannot find $ModAlias"
-    return 1
-  fi
-  local footer='esac; }'
-  INFO 'Parsing modules.alias... '
-  local ModAliasTmp=./tmp/ModAliasTmp
-  awk '/^alias / {
-        gsub(/\(/,"\"(\"")
-        gsub(/\)/,"\")\"")
-    printf("%s %s\n",$2,$3)
-  }' "$ModAlias" | sort > "$ModAliasTmp"
-  INFO 'done.\n'
-  INFO 'Generating lookup tables... '
-  LookUp=./tmp/LookUp
-  C=''
-  while read A M ; do
-    I=${A:0:1}
-    if [ "$I" != "$C" ]; then
-      [ "$C" ] && echo $footer
-      echo "lookup_$I" '() { case "$1" in'
-      C="$I"
-    fi
-    echo "$A) echo '$M' ;;"
-  done < "$ModAliasTmp" > "$LookUp"
-  echo $footer >> "$LookUp"
-  rm -f "$ModAliasTmp"
-  . "$LookUp"
-  rm -f "$LookUp"
-  INFO 'done.\n'
-}
-
 resolve_alias () { 
-  lookup_${1:0:1} "$1"
+  modprobe -S "$KVER" -aD $@ 2> /dev/null | \
+    awk '{sub(/^.*\//,""); sub(/\..*$/,""); gsub(/-/,"_"); print}' | sort -u
 }
 
 sysfs_mods () {
   [ $BBI_IGNORE_HOST = 1 ] && return
   [ ! -f "$ModAlias" ] && WARN "Build may be incomplete" && return 1
-  local A
-  for A in $(
+  local A=$(
     find /sys/devices/ -type f -name modalias -exec cat {} + 2> /dev/null \
     | sort -u
-  ) ; do
-    resolve_alias "$A"
-  done | sort -u
+  )
+  resolve_alias $A
 }
 
 get_modfile () {
@@ -84,9 +50,11 @@ usb
 scsi
 ata
 block
+nvme
 '
 
 base_modules () {
+  local F K M
   for M in $(sysfs_mods) ; do 
     F=$(get_modfile "$M")
     case "$F" in
@@ -112,60 +80,39 @@ base_modules () {
 NewList=
 Listed () {
   local M
-  for M in $NewList; do
-    [ $M = $1 ] && return 0
-  done
+  for M in $NewList; do [ "$M" = "$1" ] && return 0; done
   return 1
 }
 
 
-SoftDepsHandled=0
-
 get_soft_deps () {
   NewList=$ModList
-  local N=0
-  for MyMod in $ModList; do
-    N=$((N+1))
-    [ $N -le $SoftDepsHandled ] && continue
-    while read Mod Deps; do
-    if [ "$Mod" = "$MyMod" ] ; then 
-      for Dep in $Deps; do
-        if [ "$Dep" = 'crc32c' ] ; then
-          if grep -qs '^flags.*\<sse4_2\>' /proc/cpuinfo; then
-             Dep='crc32c_intel'
-          else
-            Dep='crc32c_generic'
-          fi
-        else
-          local RealName=$(resolve_alias $Dep)
-          [ "$RealName" ] && Dep=$RealName
-        fi
-      done
+  local Mod
+  for Mod in $ModList; do
+    for Dep in $(modinfo -k "$KVER" -F softdep "$Mod") ; do
+      case $Dep in
+        *:) continue ;;
+        crc32c)   
+          Dep='crc32c_generic'
+          [ $BBI_IGNORE_HOST = 0 ] && \
+            grep -qs '^flags.*\<sse4_2\>' /proc/cpuinfo && \
+              Dep='crc32c_intel'
+        ;;
+      esac
+      Dep=$(resolve_alias $Dep)
       Listed $Dep || NewList="$NewList $Dep"
-    fi
-    done < "$softdeps"
+    done
   done
   NewList=$(echo $NewList)
   local Diff=$((${#NewList}-${#ModList}))
   ModList=$NewList
+  return 1
   [ $Diff -eq 0 ] && return 1 || return 0
 }
 
 
-HardDepsHandled=0
-
 get_hard_deps () {
-  NewList=$ModList
-  local N=0
-  for MyMod in $ModList; do
-    N=$((N+1))
-    [ $N -le $HardDepsHandled ] && continue
-    local Deps=$(grep "^$MyMod " "$harddeps") || continue
-    for Dep in $Deps; do
-      Listed $Dep || NewList="$NewList $Dep"
-    done
-  done
-  HardDepsHandled=$N
+  NewList=$(resolve_alias $ModList)
   NewList=$(echo $NewList)
   local Diff=$((${#NewList}-${#ModList}))
   ModList=$NewList
@@ -174,36 +121,17 @@ get_hard_deps () {
 
 
 get_deps () {
-INFO "Resolving module dependencies..."
-
-softdeps=./tmp/softdeps
-sed \
--e 's/^softdep[ \t]*//' \
--e 's/[ \t]pre:/ /g' \
--e 's/[ \t]post:/ /g' \
--e 's/[ \t]platform:/ /g' \
--e 's/-/_/g' \
-$MODULES_SRC_DIR/modules.softdep > "$softdeps"
-
-harddeps=./tmp/harddeps
-sed \
--e 's#[^ \t]*/##g' \
--e 's/\.[^ \t]*//g' \
--e 's/-/_/g' \
-$MODULES_SRC_DIR/modules.dep > "$harddeps"
-
-Loop=0
-while get_hard_deps || get_soft_deps ; do
-  INFO .
-  Loop=$((Loop+1))
-  if [ $Loop -ge 32 ] ; then
-    WARN "Unable to recurse dependencies after $Loop tries, giving up."
-    break
-  fi
-done
-INFO ' done.\n'
-rm -f "$harddeps"
-rm -f "$softdeps"
+  INFO "Resolving module dependencies..."
+  Loop=0
+  while get_hard_deps || get_soft_deps ; do
+    INFO .
+    Loop=$((Loop+1))
+    if [ $Loop -ge 32 ] ; then
+      WARN "Unable to recurse dependencies after $Loop tries, giving up."
+      break
+    fi
+  done
+  INFO ' done.\n'
 }
 
 
@@ -310,7 +238,6 @@ main () {
   cp $BBI_RAMFS_INIT ./init
   chmod 755 ./init
 
-  gen_lookups
   local ModFiles=$(list_modules)
   INFO 'Copying modules... '
   for SRC in $ModFiles; do copy_module "$SRC" ; done
@@ -378,11 +305,11 @@ EOF
       $BBI_COMPRESSOR > "$BBI_RAMFS_NAME"
     INFO "done.\n"
     INFO $(
-      printf 'Created "%s" (%s entries, %sMB)\n' \
+      printf 'Created "%s" (%s entries, %s) in %s seconds\n' \
       $BBI_RAMFS_NAME \
       $(find . | grep -v '\./tmp/..*' | wc -l) \
-      $(stat -c %s $BBI_RAMFS_NAME | \
-      awk '{printf("%0.2f\n", $1/(1024*1024))}')
+      $(stat -c "%s $EPOCHREALTIME $Start" $BBI_RAMFS_NAME | \
+      awk '{printf("%0.2fMB %0.2f\n", $1/(1024*1024),$2-$3)}')
     )'\n'
   else
     ERROR "Failed to create $BBI_RAMFS_NAME"
@@ -392,7 +319,7 @@ EOF
 
 
 KVER=$1
-[ "x$2" = 'x' ] || BBI_RAMFS_NAME=$2
+[ "$2" ] && BBI_RAMFS_NAME=$2
 
 main
 
